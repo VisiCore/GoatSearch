@@ -1,0 +1,10 @@
+<dashboard version="1.1" theme="dark">
+  <label>GoatSearch Explorer</label>
+  <row>
+    <panel>
+      <html>
+        <h2>Explorer coming soon.</h2>
+      </html>
+    </panel>
+  </row>
+</dashboard>

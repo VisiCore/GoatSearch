@@ -1,0 +1,4 @@
+<nav search_view="search">
+  <view name="goatsearch_explorer" default="true" />
+  <view name="search" />
+</nav>

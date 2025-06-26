@@ -1,0 +1,14 @@
+bin/AppPack_Local.json
+bin/package.py
+bin/app_pack
+local/*
+default.old.*
+metadata/local.meta
+__pycache__
+*.pyc
+*.swp
+node_modules
+package-lock.json
+dist/*
+bin/packages/*
+!bin/packages/README
