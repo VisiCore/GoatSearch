@@ -8,12 +8,6 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-CRIBL_WORKSPACE = 'main'
-CRIBL_TENANT = 'kind-hypatia-1buyrym'
-CRIBL_CLIENT_ID = '6wmf3QSGoiA3bZWhPBj8b1hHXyQR0Q3n'
-CRIBL_TOKEN = 'Nue7v5WXSdR6ZVd3WWNYt9eCeao8vhZ_uAikMB8hLBYOG9NMOuUY5iG_h6PF3-ru'
-
-
 from splunklib.searchcommands import \
     dispatch, GeneratingCommand, Configuration, Option, validators
 
@@ -21,17 +15,35 @@ from splunklib.searchcommands import \
 class goatsearch(GeneratingCommand):
     query = Option(require=True, validate=None)
     sample = Option(require=False, validate=None)
+    page = Option(require=False, validate=None)
+    tenant = Option(require=True, validate=None)
+    workspace = Option(require=False, validate=None)
 
-    def _get_auth_token(self):
+    def _get_auth_token(self, tenant, client_id):
         # TODO: Take this from the .conf/password object
         # TODO: Maybe make the audience configurable?
+
+        storage_passwords = self.service.storage_passwords
+
+        credential_name = "%s:%s:" % (
+            tenant,
+            client_id
+        )
+
+        # TODO: Check password exists
+
+        credential = False
+
+        for storage_password in storage_passwords.list():
+            if storage_password.name == credential_name:
+                credential = storage_password['clear_password']
 
         auth_uri = 'https://login.cribl.cloud/oauth/token'
 
         auth = {
             'grant_type': 'client_credentials',
-            'client_id': CRIBL_CLIENT_ID,
-            'client_secret': CRIBL_TOKEN,
+            'client_id': client_id,
+            'client_secret': credential,
             'audience': 'https://api.cribl.cloud'
         }
 
@@ -52,7 +64,31 @@ class goatsearch(GeneratingCommand):
 
         return False
 
+    def _get_environment(self):
+        if self.workspace:
+            kvquery = {
+                "tenant": self.tenant,
+                "workspace": self.workspace
+            }
+        else:
+            kvquery = {
+                "tenant": self.tenant,
+                "workspace": "main"
+            }
+
+            collection = self.service.kvstore['goatsearch_env_kv']
+
+            env_raw = collection.data.query(query=kvquery)
+
+            for env in env_raw:
+                return env['clientId'], env['tenant'], env['workspace']
+
+            return False
+
     def generate(self):
+        # TODO: Make sure we got something
+        client_id, tenant, workspace = self._get_environment()
+
         earliest = self.metadata.searchinfo.earliest_time
         latest = self.metadata.searchinfo.latest_time
 
@@ -61,7 +97,7 @@ class goatsearch(GeneratingCommand):
         search_context = 'default_search'
 
         # TODO: Fail gracefully if 401.
-        token = self._get_auth_token()
+        token = self._get_auth_token(tenant, client_id)
 
         headers = {
             'Authorization': 'Bearer %s' % token,
@@ -69,8 +105,8 @@ class goatsearch(GeneratingCommand):
         }
 
         baseuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/jobs' % (
-            CRIBL_WORKSPACE,
-            CRIBL_TENANT,
+            workspace,
+            tenant,
             search_context
         )
 
@@ -109,6 +145,8 @@ class goatsearch(GeneratingCommand):
 
         job_complete = False
 
+        total_event_count = 0
+
         while not job_complete:
             status_uri = '%s/%s/status' % (
                 baseuri,
@@ -133,18 +171,16 @@ class goatsearch(GeneratingCommand):
                 if 'status' in job_status and job_status['status'] == 'completed':
                     job_complete = True
 
-                    # yield {
-                    #     '_raw': job_status,
-                    #     'bear': 1
-                    # }
-
         # TODO: Do something when no results
 
         # TODO: Do something if the job fail
 
-        # TODO: Maybe make these options?
         offset = 0
-        limit = 200
+
+        if self.page:
+            api_limit = int(self.page)
+        else:
+            api_limit = 200
 
         all_collected = False
 
@@ -152,7 +188,7 @@ class goatsearch(GeneratingCommand):
             results_uri = '%s/%s/results?limit=%s&offset=%s' % (
                 baseuri,
                 job_id,
-                limit,
+                api_limit,
                 offset
             )
 
@@ -180,13 +216,17 @@ class goatsearch(GeneratingCommand):
 
                     raw_dict = json.loads(event['_raw'])
 
-                    # evt['dict'] = raw_dict
-
                     for k, v in raw_dict.items():
                         evt[k]= v
 
                     yield evt
                 else:
-                    yield { '_raw': event, 'gristen': 1 }
+                    if 'totalEventCount' in event.keys():
+                        total_event_count = event['totalEventCount']
+
+            if offset >= total_event_count:
+                all_collected = True
+
+            offset = offset + api_limit
 
 dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)

@@ -5,7 +5,7 @@
         "id": {
             "group": null,
             "name": "GoatSearch",
-            "version": "0.0.4"
+            "version": "0.1.0"
         },
         "author": [
             {
@@ -15,7 +15,7 @@
             }
         ],
         "releaseDate": null,
-        "description": "VisiCore's GoatSearch allows you to use Heavenly Goat Search results in a Splunk search.",
+        "description": "VisiCore's GoatSearch allows you to use Cribl Search results in a Splunk search.",
         "classification": {
             "intendedAudience": null,
             "categories": [],
