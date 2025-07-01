@@ -16,7 +16,7 @@ class goatsearch(GeneratingCommand):
     query = Option(require=True, validate=None)
     sample = Option(require=False, validate=None)
     page = Option(require=False, validate=None)
-    tenant = Option(require=True, validate=None)
+    tenant = Option(require=False, validate=None)
     workspace = Option(require=False, validate=None)
 
     def _get_auth_token(self, tenant, client_id):
@@ -65,7 +65,17 @@ class goatsearch(GeneratingCommand):
         return False
 
     def _get_environment(self):
-        if self.workspace:
+        if not self.tenant:
+            kvquery = {
+                "$or": [
+                    {"default": 1},
+                    {"default": "1"},
+                    {"default": True},
+                    {"default": "true"},
+                    {"default": "True"}
+                ]
+            }
+        elif self.workspace:
             kvquery = {
                 "tenant": self.tenant,
                 "workspace": self.workspace

@@ -1,0 +1,20 @@
+.btn-delete {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.btn-delete:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.default-tenant {
+    width: 20px;
+    height: 20px;
+    border-radius: 20px;
+    border: 0;
+    padding: 1px;
+    text-align: center;
+    margin: 5px auto;
+}
+

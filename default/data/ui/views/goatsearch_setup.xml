@@ -1,0 +1,169 @@
+<form version="1.1" theme="dark" stylesheet="styles/goatsearch.css" script="javascript/setup.js">
+  <init>
+    <set token="addEdit">Add</set>
+    <set token="generation">0</set>
+  </init>
+  <search id="goatsearch_configured_tenants">
+    <query>
+      | savedsearch sysGetConfiguredTenants
+      | eval
+          generation="$generation$"
+      | fields - generation
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+  </search>
+  <search id="goatsearch_edit_tenant">
+    <query>
+      | savedsearch sysLoadEditTenant key="$editCCID$"
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <done>
+      <set token="form.newCCTenant">$result.tenant$</set>
+      <set token="form.newCCWorkspace">$result.workspace$</set>
+      <set token="form.newCCClientId">$result.clientId$</set>
+      <unset token="form.newCCClientSecret" />
+      <set token="addEdit">Save</set>
+      <set token="cancelAddEdit">true</set>
+    </done>
+  </search>
+  <search id="goatsearch_delete_tenant">
+    <query>
+      | savedsearch sysDeleteTenant key="$deleteTenantKey$"
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <done>
+      <eval token="generation">$generation$ + 1</eval>
+    </done>
+  </search>
+  <search id="goatsearch_add_tenant">
+    <query>
+      | savedsearch sysCreateNewTenant
+        tenant="$newCCTenant$",
+        workspace="$newCCWorkspace$",
+        clientId="$newCCClientId$",
+        clientSecret="$newCCClientSecret$",
+        default="$calculatedDefault$"
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <done>
+      <unset token="form.newCCTenant" />
+      <unset token="form.newCCWorkspace" />
+      <unset token="form.newCCClientId" />
+      <unset token="form.newCCClientSecret" />
+      <unset token="form.newCCDefault" />
+      <unset token="calculatedDefault" />
+      <set token="lastCreatedId">$result.id$</set>
+      <eval token="generation">if ( $clearSetDefaults$ == "true", $generation$, $generation$ + 1)</eval>
+    </done>
+  </search>
+  <search id="goatsearch_edit_tenant_record">
+    <query>
+      | savedsearch sysEditTenant
+        tenant_key="$editCCID$",
+        tenant="$newCCTenant$",
+        workspace="$newCCWorkspace$",
+        clientId="$newCCClientId$",
+        clientSecret="$newCCClientSecret$",
+        default="$calculatedEditDefault$"
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <done>
+      <unset token="form.newCCTenant" />
+      <unset token="form.newCCWorkspace" />
+      <unset token="form.newCCClientId" />
+      <unset token="form.newCCClientSecret" />
+      <unset token="form.newCCDefault" />
+      <unset token="calculatedEditDefault" />
+      <set token="lastCreatedId">$result.id$</set>
+      <set token="addEdit">Add</set>
+      <unset token="cancelAddEdit" />
+      <eval token="generation">if ( $clearSetDefaults$ == "true", $generation$, $generation$ + 1)</eval>
+    </done>
+  </search>
+  <search id="goatsearch_clear_defaults">
+    <query>
+      | savedsearch sysResetDefault
+        last_created_id="$lastCreatedId$",
+        clear_default="$clearSetDefaults$"
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <done>
+      <unset token="clearSetDefaults" />
+      <unset token="lastCreatedId" />
+      <eval token="generation">$generation$ + 1</eval>
+    </done>
+  </search>
+  <search id="goatsearch_set_default">
+    <query>
+      | savedsearch sysSetDefault
+        default_tenant_id="$lastCreatedId$"
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <done>
+      <set token="clearSetDefaults">true</set>
+    </done>
+  </search>
+  <label>Setup</label>
+  <fieldset submitButton="false"></fieldset>
+  <row>
+    <panel>
+      <html>
+      <h1>GoatSearch Tenants</h1>
+      <p>Here you can add, edit, and remove Cribl.Cloud tenants. Client Secrets are stored securely using Splunk's Storage Passwords endpoint; you will not be able to retrieve your Client Secret (from this page) once set. You must have at least one tenant configured to use GoatSearch.</p>
+      <p><a href="https://youtu.be/kmNcNLcbFWo" target="blank">Help Getting These Settings</a></p>
+    </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <input type="text" token="newCCTenant">
+        <label>Cribl.Cloud Tenant</label>
+      </input>
+      <input type="text" token="editCCID" depends="$hide$"></input>
+    </panel>
+    <panel>
+      <input type="text" token="newCCWorkspace">
+        <label>Workspace</label>
+      </input>
+    </panel>
+    <panel>
+      <input type="text" token="newCCClientId">
+        <label>Client ID</label>
+      </input>
+    </panel>
+    <panel>
+      <input type="password" token="newCCClientSecret">
+        <label>Client Secret</label>
+      </input>
+    </panel>
+    <panel>
+      <input type="checkbox" token="newCCDefault" id="newCCDefault">
+        <label></label>
+        <choice value="set">Default Tenant</choice>
+      </input>
+    </panel>
+    <panel>
+      <html>
+        <button class="btn btn-primary" id="add_edit_tenant">$addEdit$ Tenant</button>
+      </html>
+      <html depends="$cancelAddEdit$">
+        <button class="btn btn-delete">Cancel</button>
+      </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Configured Tenants</title>
+      <html>
+        <div id="goatsearch_tenant_results"></div>
+      </html>
+    </panel>
+  </row>
+</form>

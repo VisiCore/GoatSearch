@@ -1,5 +1,5 @@
-# VisiCore GoatSearch version 0.1.0 (5)
-# default.meta: packaged 06/27/2025 by Duck Yeah! version 3.0.0
+# VisiCore GoatSearch version 0.10.2 (12)
+# default.meta: packaged 07/01/2025 by Duck Yeah! version 3.0.0
 # Please do not modify this header manually. It is required by Duck Yeah!.
 #
 # Want Duck Yeah!? Download from Splunkbase: https://splunkbase.splunk.com/app/7015
@@ -12,7 +12,77 @@ access = read : [ * ], write : [ admin, sc_admin ]
 export = system
 owner = nobody
 
+[app/install]
+access = read : [ * ], write : [ admin, sc_admin ]
+modtime = 1751403532.461457000
+owner = nobody
+version = 9.2.1
+
+[commands/goatpass]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = system
+owner = nobody
+
 [commands/goatsearch]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = system
+owner = nobody
+
+[savedsearches/sysCreateNewTenant]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751400919.866984000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysDeleteTenant]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751400927.765908000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysEditTenant]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751400956.603873000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysGetConfiguredTenants]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751400937.144330000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysLoadEditTenant]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751400944.173525000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysResetDefault]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751400949.861856000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysSetDefault]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751401873.046261000
+owner = nobody
+version = 9.2.1
+
+[searchbnf/goatpass-command]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = system
+owner = nobody
+
+[searchbnf/goatpass-options]
 access = read : [ * ], write : [ admin, sc_admin ]
 export = system
 owner = nobody
@@ -29,6 +99,12 @@ owner = nobody
 
 [views/goatsearch_explorer]
 access = read : [ * ], write : [ admin, sc_admin ]
-modtime = 1750902573.000228000
+modtime = 1751402603.653310000
+owner = nobody
+version = 9.2.1
+
+[views/goatsearch_setup]
+access = read : [ * ], write : [ admin, sc_admin ]
+modtime = 1751405744.449416000
 owner = nobody
 version = 9.2.1

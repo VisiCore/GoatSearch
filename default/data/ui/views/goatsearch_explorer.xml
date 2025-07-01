@@ -3,7 +3,7 @@
   <row>
     <panel>
       <html>
-        <h2>Explorer coming soon.</h2>
+        <p>To use GoatSearch Explorer, first obtain a client ID and secret from your Cribl.Cloud instance.</p>
       </html>
     </panel>
   </row>
