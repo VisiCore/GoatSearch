@@ -154,7 +154,7 @@
         <button class="btn btn-primary" id="add_edit_tenant">$addEdit$ Tenant</button>
       </html>
       <html depends="$cancelAddEdit$">
-        <button class="btn btn-delete">Cancel</button>
+        <button class="btn btn-delete" id="cancel_edit">Cancel</button>
       </html>
     </panel>
   </row>

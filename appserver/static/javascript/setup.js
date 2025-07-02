@@ -53,7 +53,7 @@ require([
                 }
 
                 $container.html(`
-                    <a class="btn btn-primary" aria-label="Search Button" href="#"><i class="icon-search-thin"></i></a>
+                    <a class="btn btn-primary btn-explore" aria-label="Search Button" href="/app/GoatSearch/goatsearch_explorer?form.loadTenant=${params[0]}"><i class="icon-search-thin"></i></a>
                     <button class="btn btn-primary goatsearch-edit" data-target="${params[0]}">Edit</button>
                     <button class="btn btn-delete goatsearch-delete" data-target="${params[0]}">Delete</button>
                     <button class="btn ${btn_class} goatsearch-default" data-target="${params[0]}"${disable_prop}>Make Default</button>
@@ -133,4 +133,25 @@ require([
         globalSetToken('lastCreatedId', $(this).attr('data-target'));
     });
 
+    $(document).on("click", ".btn-explore", function(e) {
+        e.preventDefault();
+
+        window.location.href = $(this).attr('href');
+    });
+
+    $(document).on("click", "#cancel_edit", function(e) {
+        e.preventDefault();
+
+        globalUnsetToken('form.newCCTenant');
+        globalUnsetToken('form.newCCWorkspace');
+        globalUnsetToken('form.newCCClientId');
+        globalUnsetToken('form.newCCClientSecret');
+        globalUnsetToken('cancelAddEdit');
+        globalSetToken('addEdit', 'Add');
+        globalUnsetToken('form.editCCID');
+
+        $(".goatsearch-edit").addClass("btn-primary");
+        $(".goatsearch-edit").removeClass("edit-btn");
+        $(".goatsearch-edit").prop('disabled', false);
+    });
 });

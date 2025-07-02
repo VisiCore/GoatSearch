@@ -1,3 +1,8 @@
+#csearch_query {
+    width: 100%;
+    height: 125px;
+}
+
 .btn-delete {
     background-color: #dc3545;
     border-color: #dc3545;
@@ -6,6 +11,13 @@
 .btn-delete:hover {
     background-color: #c82333;
     border-color: #bd2130;
+}
+
+.code {
+    font-family: "Splunk Platform Mono", Inconsolata, Consolas, "Droid Sans Mono", Monaco, "Courier New", Courier, monospace;
+    background-color: #3c444d;
+    padding: 3px 6px;
+    border-radius: 2px;
 }
 
 .default-tenant {
@@ -18,3 +30,41 @@
     margin: 5px auto;
 }
 
+.search-open {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 19px;
+    cursor: pointer;
+}
+
+.search-open:hover {
+    color: #00a4fd;
+}
+
+.search-open:hover .tooltiptext {
+    visibility: visible;
+}
+
+.search-open .tooltiptext {
+    visibility: hidden;
+    width: 180px;
+    background-color: rgba(0,0,0,0.8);
+    color: #F6F7F9;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 3px;
+    position: absolute;
+    z-index: 1;
+}
+
+.tooltip-bottom {
+    top: 135%;
+    left: 50%;
+    margin-left: -165px;
+}
+
+pre {
+    background: #171d21;
+    color: #F6F7F9;
+}

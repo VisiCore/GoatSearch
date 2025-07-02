@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 from splunklib.searchcommands import \
     dispatch, GeneratingCommand, Configuration, Option, validators
 
-@Configuration(local=True)
+@Configuration(local=True, type='events')
 class goatsearch(GeneratingCommand):
     query = Option(require=True, validate=None)
     sample = Option(require=False, validate=None)
@@ -67,13 +67,7 @@ class goatsearch(GeneratingCommand):
     def _get_environment(self):
         if not self.tenant:
             kvquery = {
-                "$or": [
-                    {"default": 1},
-                    {"default": "1"},
-                    {"default": True},
-                    {"default": "true"},
-                    {"default": "True"}
-                ]
+                "default": 1
             }
         elif self.workspace:
             kvquery = {
@@ -86,14 +80,15 @@ class goatsearch(GeneratingCommand):
                 "workspace": "main"
             }
 
-            collection = self.service.kvstore['goatsearch_env_kv']
+        collection = self.service.kvstore['goatsearch_env_kv']
 
-            env_raw = collection.data.query(query=kvquery)
+        env_raw = collection.data.query(query=kvquery)
 
-            for env in env_raw:
-                return env['clientId'], env['tenant'], env['workspace']
+        for env in env_raw:
+            return env['clientId'], env['tenant'], env['workspace']
 
-            return False
+        return False
+
 
     def generate(self):
         # TODO: Make sure we got something
@@ -123,7 +118,7 @@ class goatsearch(GeneratingCommand):
         if not self.sample:
             sample_ratio = 1
         else:
-            sample_ratio = self.sample
+            sample_ratio = 1 / int(self.sample)
 
         job = {
             'query': 'cribl %s' % self.query,

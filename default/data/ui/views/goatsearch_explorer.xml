@@ -1,10 +1,122 @@
-<dashboard version="1.1" theme="dark">
+<form version="1.1" theme="dark" stylesheet="styles/goatsearch.css" script="javascript/goatsearch.js">
+  <init>
+    <set token="tenantString"></set>
+    <set token="workspaceString"></set>
+    <set token="pageSizeString"></set>
+    <set token="sampleRatioString"></set>
+    <set token="queryString"></set>
+  </init>
+  <search id="preload_tenant">
+    <query>
+      | savedsearch sysLoadEditTenant key="$loadTenant$"
+    </query>
+    <done>
+      <set token="form.tokenSelectedTenant">$result.tenant$</set>
+      <set token="form.tokenSelectedWorkspace">$result.workspace$</set>
+    </done>
+  </search>
   <label>GoatSearch Explorer</label>
   <row>
     <panel>
       <html>
-        <p>To use GoatSearch Explorer, first obtain a client ID and secret from your Cribl.Cloud instance.</p>
+        <p>Welcome to GoatSearch Explorer! Use this view to generate SPL from your Cribl Search KQL and get familiar with the <span class="code">| goatsearch</span> syntax.</p>
       </html>
     </panel>
   </row>
-</dashboard>
+  <row>
+    <panel>
+      <input type="dropdown" token="tokenSelectedTenant">
+        <label>Tenant</label>
+        <fieldForLabel>tenant</fieldForLabel>
+        <fieldForValue>tenant</fieldForValue>
+        <search>
+          <query>
+            | savedsearch sysGetTenantList
+          </query>
+        </search>
+        <change>
+          <eval token="tenantString">if (isnull($value$), "", " tenant=\"" + $value$ + "\"")</eval>
+        </change>
+      </input>
+      <input type="text" depends="$hide$" token="loadTenant">
+        <label></label>
+      </input>
+    </panel>
+    <panel depends="$tokenSelectedTenant$">
+      <input type="dropdown" token="tokenSelectedWorkspace">
+        <label>Workspace</label>
+        <fieldForLabel>workspace</fieldForLabel>
+        <fieldForValue>workspace</fieldForValue>
+        <search>
+          <query>
+            | savedsearch sysGetWorkspaceList tenant="$tokenSelectedTenant$"
+          </query>
+        </search>
+        <change>
+          <eval token="workspaceString">if (isnull($value$), "", " workspace=\"" + $value$ + "\"")</eval>
+        </change>
+      </input>
+    </panel>
+    <panel>
+      <input type="checkbox" token="tokenSelectPageSize">
+        <label></label>
+        <choice value="set">Change Page Size?</choice>
+        <change>
+          <set token="pageSizeString"></set>
+          <unset token="form.pageSizeValue" />
+        </change>
+      </input>
+      <input type="text" depends="$tokenSelectPageSize$" token="pageSizeValue">
+        <label></label>
+        <change>
+          <eval token="pageSizeString">if (isnull($value$), "", " page=\"" + $value$ + "\"")</eval>
+        </change>
+      </input>
+    </panel>
+    <panel>
+      <input type="checkbox" token="tokenSelectSampleRatio">
+        <label></label>
+        <choice value="set">Change Sample Ratio?</choice>
+        <change>
+          <set token="sampleRatioString"></set>
+          <unset token="form.sampleSizeValue" />
+        </change>
+      </input>
+      <input type="text" depends="$tokenSelectSampleRatio$" token="sampleSizeValue">
+        <label></label>
+        <change>
+          <eval token="sampleRatioString">if (isnull($value$), "", " sample=\"" + $value$ + "\"")</eval>
+        </change>
+      </input>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+        <label for="csearch_query">Cribl Search Query</label>
+        <textarea name="csearch_query" id="csearch_query">dataset="cribl_internal_logs" | limit 1000</textarea>
+      </html>
+    </panel>
+    <panel>
+      <input type="time" token="tokenCSearchTime">
+        <label>Time Range</label>
+        <default>
+          <earliest>-15m</earliest>
+          <latest>now</latest>
+        </default>
+      </input>
+      <html>
+        <p>Time range will be sent to the target time range picker.</p>
+      </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Splunk Search Query</title>
+      <html>
+        <pre id="csearch_string">| goatsearch$tenantString$$workspaceString$$pageSizeString$$sampleRatioString$$queryString$</pre>
+        <i class="icon-search-thin search-open" id="csearch_open"><span class="tooltiptext tooltip-bottom">Open in Search...</span></i>
+      </html>
+    </panel>
+  </row>
+</form>

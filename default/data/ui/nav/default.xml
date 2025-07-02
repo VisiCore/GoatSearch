@@ -1,5 +1,5 @@
 <nav search_view="search">
   <view name="goatsearch_explorer" default="true" />
-  <view name="goatsearch_setup" />
   <view name="search" />
+  <view name="goatsearch_setup" />
 </nav>

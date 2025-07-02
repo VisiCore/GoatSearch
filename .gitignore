@@ -12,3 +12,4 @@ package-lock.json
 dist/*
 bin/packages/*
 !bin/packages/README
+goatsearch.py.exp
