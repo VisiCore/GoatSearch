@@ -5,6 +5,7 @@ import os
 import re
 import requests
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
@@ -13,7 +14,7 @@ from splunklib.searchcommands import \
 
 @Configuration(local=True, type='events')
 class goatsearch(GeneratingCommand):
-    query = Option(require=True, validate=None)
+    query = Option(require=False, validate=None)
     sample = Option(require=False, validate=None)
     page = Option(require=False, validate=None)
     tenant = Option(require=False, validate=None)
@@ -94,13 +95,6 @@ class goatsearch(GeneratingCommand):
         # TODO: Make sure we got something
         client_id, tenant, workspace = self._get_environment()
 
-        earliest = self.metadata.searchinfo.earliest_time
-        latest = self.metadata.searchinfo.latest_time
-
-        # TODO: Placeholder. This is hard-coded in the API documentation but the format suggests
-        #       it could be a variable for a coming feature.
-        search_context = 'default_search'
-
         # TODO: Fail gracefully if 401.
         token = self._get_auth_token(tenant, client_id)
 
@@ -109,129 +103,164 @@ class goatsearch(GeneratingCommand):
             'Content-Type': 'application/json'
         }
 
-        baseuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/jobs' % (
-            workspace,
-            tenant,
-            search_context
-        )
+        # TODO: Placeholder. This is hard-coded in the API documentation but the format suggests
+        #       it could be a variable for a coming feature.
+        search_context = 'default_search'
 
-        if not self.sample:
-            sample_ratio = 1
-        else:
-            sample_ratio = 1 / int(self.sample)
-
-        job = {
-            'query': 'cribl %s' % self.query,
-            'earliest': earliest,
-            'latest': latest,
-            'sampleRate': sample_ratio
-        }
-
-        # TODO: Require sample to be an integer (and possibly a power of 10)
-
-        search_job = requests.post(
-            baseuri,
-            json = job,
-            headers = headers
-        )
-
-        job_deets = json.loads(search_job.text)
-
-        job_id = False
-
-        # TODO: Check that this is an expected { "items: [] } format
-
-        for deet in job_deets['items']:
-            if 'id' in deet:
-                job_id = deet['id']
-
-
-        # TODO: Check that we actually retrieved a job ID
-
-        job_complete = False
-
-        total_event_count = 0
-
-        while not job_complete:
-            status_uri = '%s/%s/status' % (
-                baseuri,
-                job_id
+        if not self.query:
+            dataseturi = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/datasets' % (
+                workspace,
+                tenant,
+                search_context
             )
 
-            status = requests.get(
-                status_uri,
+            dataset_job = requests.get(
+                dataseturi,
+                headers=headers
+            )
+
+            dataset_deets = json.loads(dataset_job.text)
+
+            for dataset in dataset_deets['items']:
+                evt = {
+                    '_raw': json.dumps(dataset),
+                    '_time': time.time(),
+                    'index': 'default_search',
+                    'source': 'source',
+                    'sourcetype': 'dataset'
+                }
+
+                for k, v in dataset.items():
+                    evt[k]= v
+
+                yield evt
+
+        else:
+            earliest = self.metadata.searchinfo.earliest_time
+            latest = self.metadata.searchinfo.latest_time
+
+            baseuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/jobs' % (
+                workspace,
+                tenant,
+                search_context
+            )
+
+            if not self.sample:
+                sample_ratio = 1
+            else:
+                sample_ratio = 1 / int(self.sample)
+
+            job = {
+                'query': 'cribl %s' % self.query,
+                'earliest': earliest,
+                'latest': latest,
+                'sampleRate': sample_ratio
+            }
+
+            # TODO: Require sample to be an integer (and possibly a power of 10)
+
+            search_job = requests.post(
+                baseuri,
+                json = job,
                 headers = headers
             )
 
-            # TODO: Make sure that this is an expected { "items: [] } format
+            job_deets = json.loads(search_job.text)
 
-            statuses = json.loads(status.text)
+            job_id = False
 
-            for job_status in statuses['items']:
-                # Is statuses a word? Stati?
+            # TODO: Check that this is an expected { "items: [] } format
 
-                # TODO: Add some sort of status notifier or job duration. Maybe we can hijack the error mechanism for this.
-                #       ... if I can that would be my most advanced UI hijack to date...
+            for deet in job_deets['items']:
+                if 'id' in deet:
+                    job_id = deet['id']
 
-                if 'status' in job_status and job_status['status'] == 'completed':
-                    job_complete = True
+            # TODO: Check that we actually retrieved a job ID
 
-        # TODO: Do something when no results
+            job_complete = False
 
-        # TODO: Do something if the job fail
+            total_event_count = 0
 
-        offset = 0
+            while not job_complete:
+                status_uri = '%s/%s/status' % (
+                    baseuri,
+                    job_id
+                )
 
-        if self.page:
-            api_limit = int(self.page)
-        else:
-            api_limit = 200
+                status = requests.get(
+                    status_uri,
+                    headers = headers
+                )
 
-        all_collected = False
+                # TODO: Make sure that this is an expected { "items: [] } format
 
-        while not all_collected:
-            results_uri = '%s/%s/results?limit=%s&offset=%s' % (
-                baseuri,
-                job_id,
-                api_limit,
-                offset
-            )
+                statuses = json.loads(status.text)
 
-            # TODO: We have to account for the fact these results may be out of time-order.
+                for job_status in statuses['items']:
+                    # Is statuses a word? Stati?
 
-            headers['Accept'] = 'application/x-nd-json'
+                    # TODO: Add some sort of status notifier or job duration. Maybe we can hijack the error mechanism for this.
+                    #       ... if I can that would be my most advanced UI hijack to date...
 
-            results_chunk = requests.get(
-                results_uri,
-                headers = headers,
-                stream = True
-            )
+                    if 'status' in job_status and job_status['status'] == 'completed':
+                        job_complete = True
 
-            for line in results_chunk.iter_lines():
-                event = json.loads(line)
+            # TODO: Do something when no results
 
-                if '_raw' in event:
-                    evt = {
-                        '_raw': event['_raw'],
-                        '_time': event['_time'],
-                        'index': event['dataset'],
-                        'source': event['source'],
-                        'sourcetype': event['datatype']
-                    }
+            # TODO: Do something if the job fail
 
-                    raw_dict = json.loads(event['_raw'])
+            offset = 0
 
-                    for k, v in raw_dict.items():
-                        evt[k]= v
+            if self.page:
+                api_limit = int(self.page)
+            else:
+                api_limit = 200
 
-                    yield evt
-                else:
-                    if 'totalEventCount' in event.keys():
-                        total_event_count = event['totalEventCount']
+            all_collected = False
 
-            if offset >= total_event_count:
-                all_collected = True
+            while not all_collected:
+                results_uri = '%s/%s/results?limit=%s&offset=%s' % (
+                    baseuri,
+                    job_id,
+                    api_limit,
+                    offset
+                )
 
-            offset = offset + api_limit
+                # TODO: We have to account for the fact these results may be out of time-order.
+
+                headers['Accept'] = 'application/x-nd-json'
+
+                results_chunk = requests.get(
+                    results_uri,
+                    headers = headers,
+                    stream = True
+                )
+
+                for line in results_chunk.iter_lines():
+                    event = json.loads(line)
+
+                    if '_raw' in event:
+                        evt = {
+                            '_raw': event['_raw'],
+                            '_time': event['_time'],
+                            'index': event['dataset'],
+                            'source': event['source'],
+                            'sourcetype': event['datatype']
+                        }
+
+                        raw_dict = json.loads(event['_raw'])
+
+                        for k, v in raw_dict.items():
+                            evt[k]= v
+
+                        yield evt
+                    else:
+                        if 'totalEventCount' in event.keys():
+                            total_event_count = event['totalEventCount']
+
+                if offset >= total_event_count:
+                    all_collected = True
+
+                offset = offset + api_limit
 
 dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)

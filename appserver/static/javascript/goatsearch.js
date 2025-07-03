@@ -46,6 +46,12 @@ require([
         window.open(`/app/GoatSearch/search?earliest=${earliest}&latest=${latest}&q=${goatsearch}`, '_blank').focus();
     });
 
-    updateSPLSearch();
+    tokens.on("change:tokenSelectedDataset", function(model, value, options) {
+        updateSPLSearch();
+    });
+
+    $(document).ready(function() {
+        updateSPLSearch();
+    });
 });
 

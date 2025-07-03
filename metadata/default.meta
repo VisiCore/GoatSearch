@@ -1,5 +1,5 @@
-# VisiCore GoatSearch version 0.10.5 (15)
-# default.meta: packaged 07/02/2025 by Duck Yeah! version 3.0.0
+# VisiCore GoatSearch version 0.11.0 (19)
+# default.meta: packaged 07/03/2025 by Duck Yeah! version 3.0.0
 # Please do not modify this header manually. It is required by Duck Yeah!.
 #
 # Want Duck Yeah!? Download from Splunkbase: https://splunkbase.splunk.com/app/7015
@@ -14,7 +14,7 @@ owner = nobody
 
 [app/install]
 access = read : [ * ], write : [ admin, sc_admin ]
-modtime = 1751406234.776921000
+modtime = 1751550455.202264000
 owner = nobody
 version = 9.2.1
 
@@ -38,7 +38,7 @@ version = 9.2.1
 [savedsearches/sysDeleteTenant]
 access = read : [ * ], write : [ admin, sc_admin ]
 export = none
-modtime = 1751425772.751700000
+modtime = 1751550339.033531000
 owner = nobody
 version = 9.2.1
 
@@ -49,10 +49,31 @@ modtime = 1751425768.342466000
 owner = nobody
 version = 9.2.1
 
+[savedsearches/sysGeneratePageOptions]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751470153.645518000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysGenerateSampleOptions]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751468195.153007000
+owner = nobody
+version = 9.2.1
+
 [savedsearches/sysGetConfiguredTenants]
 access = read : [ * ], write : [ admin, sc_admin ]
 export = none
 modtime = 1751425762.436606000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysGetDatasets]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1751546848.290447000
 owner = nobody
 version = 9.2.1
 
@@ -113,7 +134,7 @@ owner = nobody
 
 [views/goatsearch_explorer]
 access = read : [ * ], write : [ admin, sc_admin ]
-modtime = 1751425472.358715000
+modtime = 1751547144.692020000
 owner = nobody
 version = 9.2.1
 

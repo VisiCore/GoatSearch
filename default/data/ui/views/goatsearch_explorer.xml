@@ -63,15 +63,20 @@
         <choice value="set">Change Page Size?</choice>
         <change>
           <set token="pageSizeString"></set>
-          <unset token="form.pageSizeValue" />
+          <unset token="form.pageSizeValue"></unset>
         </change>
       </input>
-      <input type="text" depends="$tokenSelectPageSize$" token="pageSizeValue">
+      <input type="dropdown" depends="$tokenSelectPageSize$" token="pageSizeValue">
         <label></label>
+        <fieldForLabel>display</fieldForLabel>
+        <fieldForValue>pageSize</fieldForValue>
+        <search>
+          <query>| savedsearch sysGeneratePageOptions</query>
+        </search>
         <change>
           <eval token="pageSizeString">if (isnull($value$), "", " page=\"" + $value$ + "\"")</eval>
         </change>
-      </input>
+    </input>
     </panel>
     <panel>
       <input type="checkbox" token="tokenSelectSampleRatio">
@@ -79,22 +84,27 @@
         <choice value="set">Change Sample Ratio?</choice>
         <change>
           <set token="sampleRatioString"></set>
-          <unset token="form.sampleSizeValue" />
+          <unset token="form.sampleSizeValue"></unset>
         </change>
       </input>
-      <input type="text" depends="$tokenSelectSampleRatio$" token="sampleSizeValue">
+      <input type="dropdown" depends="$tokenSelectSampleRatio$" token="sampleSizeValue">
         <label></label>
+        <fieldForLabel>display</fieldForLabel>
+        <fieldForValue>sampleFactor</fieldForValue>
+        <search>
+          <query>| savedsearch sysGenerateSampleOptions</query>
+        </search>
         <change>
           <eval token="sampleRatioString">if (isnull($value$), "", " sample=\"" + $value$ + "\"")</eval>
         </change>
-      </input>
+    </input>
     </panel>
   </row>
   <row>
     <panel>
       <html>
         <label for="csearch_query">Cribl Search Query</label>
-        <textarea name="csearch_query" id="csearch_query">dataset="cribl_internal_logs" | limit 1000</textarea>
+        <textarea name="csearch_query" id="csearch_query">dataset="$tokenSelectedDataset$" | limit 1000</textarea>
       </html>
     </panel>
     <panel>
@@ -104,6 +114,20 @@
           <earliest>-15m</earliest>
           <latest>now</latest>
         </default>
+      </input>
+      <input type="dropdown" token="tokenSelectedDataset" depends="$tokenSelectedTenant$">
+        <label>Dataset</label>
+        <fieldForLabel>display</fieldForLabel>
+        <fieldForValue>id</fieldForValue>
+        <search>
+          <query>
+            | savedsearch sysGetDatasets tenant="$tokenSelectedTenant$"
+          </query>
+        </search>
+        <default>cribl_internal_logs</default>
+      </input>
+      <input type="text" depends="$hide$" token="loadTenant">
+        <label></label>
       </input>
       <html>
         <p>Time range will be sent to the target time range picker.</p>
@@ -115,7 +139,9 @@
       <title>Splunk Search Query</title>
       <html>
         <pre id="csearch_string">| goatsearch$tenantString$$workspaceString$$pageSizeString$$sampleRatioString$$queryString$</pre>
-        <i class="icon-search-thin search-open" id="csearch_open"><span class="tooltiptext tooltip-bottom">Open in Search...</span></i>
+        <i class="icon-search-thin search-open" id="csearch_open">
+          <span class="tooltiptext tooltip-bottom">Open in Search...</span>
+        </i>
       </html>
     </panel>
   </row>
