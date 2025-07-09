@@ -12,23 +12,48 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 from splunklib.searchcommands import \
     dispatch, GeneratingCommand, Configuration, Option, validators
 
-@Configuration(local=True, type='events')
+@Configuration(local=True, type='events', retainsevents=True)
 class goatsearch(GeneratingCommand):
     query = Option(require=False, validate=None)
     sample = Option(require=False, validate=None)
-    page = Option(require=False, validate=None)
+    page = Option(require=False, validate=validators.Integer())
     tenant = Option(require=False, validate=None)
     workspace = Option(require=False, validate=None)
+    debug = Option(require=False, validate=validators.Boolean())
 
-    def _get_auth_token(self, tenant, client_id):
+    access_token = False
+
+    v_client_id = False
+    v_tenant = False
+    v_workspace = False
+
+    headers = False
+    search_context = False
+
+    baseuri = False
+    job_id = False
+
+    event_log = []
+
+    queue_notice = False
+    running_notice = False
+    complete_notice = False
+
+    job_complete = False
+
+    total_event_count = 0
+    offset = 0
+    api_limit = 200
+
+    def _get_auth_token(self):
         # TODO: Take this from the .conf/password object
         # TODO: Maybe make the audience configurable?
 
         storage_passwords = self.service.storage_passwords
 
         credential_name = "%s:%s:" % (
-            tenant,
-            client_id
+            self.v_tenant,
+            self.v_client_id
         )
 
         # TODO: Check password exists
@@ -43,7 +68,7 @@ class goatsearch(GeneratingCommand):
 
         auth = {
             'grant_type': 'client_credentials',
-            'client_id': client_id,
+            'client_id': self.v_client_id,
             'client_secret': credential,
             'audience': 'https://api.cribl.cloud'
         }
@@ -61,8 +86,11 @@ class goatsearch(GeneratingCommand):
         auth_json = json.loads(auth_result.text)
 
         if 'access_token' in auth_json.keys():
-            return auth_json['access_token']
+            self.access_token = auth_json['access_token']
 
+            return True
+
+        # TODO: Fail gracefully
         return False
 
     def _get_environment(self):
@@ -86,37 +114,83 @@ class goatsearch(GeneratingCommand):
         env_raw = collection.data.query(query=kvquery)
 
         for env in env_raw:
-            return env['clientId'], env['tenant'], env['workspace']
+            self.v_client_id = env['clientId']
+            self.v_tenant = env['tenant']
+            self.v_workspace = env['workspace']
+
+            return True
 
         return False
 
+    def _prepare_event_search(self):
+        earliest = self.metadata.searchinfo.earliest_time
+        latest = self.metadata.searchinfo.latest_time
 
-    def generate(self):
-        # TODO: Make sure we got something
-        client_id, tenant, workspace = self._get_environment()
-
-        # TODO: Fail gracefully if 401.
-        token = self._get_auth_token(tenant, client_id)
-
-        headers = {
-            'Authorization': 'Bearer %s' % token,
-            'Content-Type': 'application/json'
+        goatevent = {
+            "data": {},
+            "_time": time.time()
         }
 
-        # TODO: Placeholder. This is hard-coded in the API documentation but the format suggests
-        #       it could be a variable for a coming feature.
-        search_context = 'default_search'
+        self.baseuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/jobs' % (
+            self.v_workspace,
+            self.v_tenant,
+            self.search_context
+        )
 
+        if self.debug:
+            devt = {
+                "url": self.baseuri
+            }
+
+            self.event_log.append({
+                "_raw": json.dumps(devt),
+                "_time": time.time(),
+                "source": "goatsearch",
+                "sourcetype": "goatsearch:json",
+                "host": "localhost"
+            })
+
+        if not self.sample:
+            sample_ratio = 1
+        else:
+            sample_ratio = 1 / int(self.sample)
+
+        job = {
+            'query': 'cribl %s' % self.query,
+            'earliest': earliest,
+            'latest': latest,
+            'sampleRate': sample_ratio
+        }
+
+        # TODO: Require sample to be an integer (and possibly a power of 10)
+
+        search_job = requests.post(
+            self.baseuri,
+            json = job,
+            headers = self.headers
+        )
+
+        job_deets = json.loads(search_job.text)
+
+        # TODO: Check that this is an expected { "items: [] } format
+
+        for deet in job_deets['items']:
+            if 'id' in deet:
+                self.job_id = deet['id']
+
+        # TODO: Check that we actually retrieved a job ID
+
+    def generate(self):
         if not self.query:
             dataseturi = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/datasets' % (
-                workspace,
-                tenant,
-                search_context
+                self.v_workspace,
+                self.v_tenant,
+                self.search_context
             )
 
             dataset_job = requests.get(
                 dataseturi,
-                headers=headers
+                headers=self.headers
             )
 
             dataset_deets = json.loads(dataset_job.text)
@@ -136,61 +210,30 @@ class goatsearch(GeneratingCommand):
                 yield evt
 
         else:
-            earliest = self.metadata.searchinfo.earliest_time
-            latest = self.metadata.searchinfo.latest_time
-
-            baseuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/jobs' % (
-                workspace,
-                tenant,
-                search_context
-            )
-
-            if not self.sample:
-                sample_ratio = 1
-            else:
-                sample_ratio = 1 / int(self.sample)
-
-            job = {
-                'query': 'cribl %s' % self.query,
-                'earliest': earliest,
-                'latest': latest,
-                'sampleRate': sample_ratio
-            }
-
-            # TODO: Require sample to be an integer (and possibly a power of 10)
-
-            search_job = requests.post(
-                baseuri,
-                json = job,
-                headers = headers
-            )
-
-            job_deets = json.loads(search_job.text)
-
-            job_id = False
-
-            # TODO: Check that this is an expected { "items: [] } format
-
-            for deet in job_deets['items']:
-                if 'id' in deet:
-                    job_id = deet['id']
-
-            # TODO: Check that we actually retrieved a job ID
-
-            job_complete = False
-
-            total_event_count = 0
-
-            while not job_complete:
+            while not self.job_complete:
                 status_uri = '%s/%s/status' % (
-                    baseuri,
-                    job_id
+                    self.baseuri,
+                    self.job_id
                 )
 
                 status = requests.get(
                     status_uri,
-                    headers = headers
+                    headers = self.headers
                 )
+
+                if self.debug:
+                    devt = {
+                        "url": status_uri,
+                        "status": json.loads(status.text)
+                    }
+
+                    yield {
+                        "_raw": json.dumps(devt),
+                        "_time": time.time(),
+                        "source": "goatsearch",
+                        "sourcetype": "goatsearch:json",
+                        "host": "localhost"
+                    }
 
                 # TODO: Make sure that this is an expected { "items: [] } format
 
@@ -202,65 +245,117 @@ class goatsearch(GeneratingCommand):
                     # TODO: Add some sort of status notifier or job duration. Maybe we can hijack the error mechanism for this.
                     #       ... if I can that would be my most advanced UI hijack to date...
 
+                    if 'totalEventCount' in job_status and job_status['totalEventCount'] > self.total_event_count:
+                        total_event_count = job_status['totalEventCount']
+
                     if 'status' in job_status and job_status['status'] == 'completed':
-                        job_complete = True
+                        self.job_complete = True
 
-            # TODO: Do something when no results
+                        if not self.complete_notice:
+                            self._record_writer._inspector['messages'] = []
+                            self.write_info('Cribl Search job complete.')
 
-            # TODO: Do something if the job fail
+                    if 'status' in job_status and job_status['status'] == 'queued' and not self.queue_notice:
+                        self._record_writer._inspector['messages'] = []
+                        self.write_warning('Waiting for queued Cribl Search job to start.')
+                        self.queue_notice = True
 
-            offset = 0
+                    if 'status' in job_status and job_status['status'] == 'running' and not self.running_notice:
+                        self._record_writer._inspector['messages'] = []
+                        self.write_info('Cribl Search job is running.')
+                        self.running_notice = True
 
-            if self.page:
-                api_limit = int(self.page)
-            else:
-                api_limit = 200
+                # TODO: Do something when no results
 
-            all_collected = False
+                # TODO: Do something if the job fail
 
-            while not all_collected:
-                results_uri = '%s/%s/results?limit=%s&offset=%s' % (
-                    baseuri,
-                    job_id,
-                    api_limit,
-                    offset
-                )
+                collecting = True
 
-                # TODO: We have to account for the fact these results may be out of time-order.
+                while collecting:
+                    collecting = False
 
-                headers['Accept'] = 'application/x-nd-json'
+                    results_uri = '%s/%s/results?limit=%s&offset=%s' % (
+                        self.baseuri,
+                        self.job_id,
+                        self.api_limit,
+                        self.offset
+                    )
 
-                results_chunk = requests.get(
-                    results_uri,
-                    headers = headers,
-                    stream = True
-                )
+                    # TODO: We have to account for the fact these results may be out of time-order.
 
-                for line in results_chunk.iter_lines():
-                    event = json.loads(line)
+                    self.headers['Accept'] = 'application/x-nd-json'
 
-                    if '_raw' in event:
-                        evt = {
-                            '_raw': event['_raw'],
-                            '_time': event['_time'],
-                            'index': event['dataset'],
-                            'source': event['source'],
-                            'sourcetype': event['datatype']
-                        }
+                    results_chunk = requests.get(
+                        results_uri,
+                        headers = self.headers,
+                        stream = True
+                    )
 
-                        raw_dict = json.loads(event['_raw'])
+                    for line in results_chunk.iter_lines():
+                        event = json.loads(line)
 
-                        for k, v in raw_dict.items():
-                            evt[k]= v
+                        if '_raw' in event:
+                            evt = {
+                                '_raw': event['_raw'],
+                                '_time': event['_time'],
+                                'index': event['dataset'],
+                                'source': event['source'],
+                                'sourcetype': event['datatype']
+                            }
 
-                        yield evt
-                    else:
-                        if 'totalEventCount' in event.keys():
-                            total_event_count = event['totalEventCount']
+                            raw_dict = json.loads(event['_raw'])
 
-                if offset >= total_event_count:
-                    all_collected = True
+                            for k, v in raw_dict.items():
+                                evt[k]= v
 
-                offset = offset + api_limit
+                            yield evt
+
+                            self.offset = self.offset + 1
+                            collecting = True
+                        else:
+                            if self.debug:
+                                devt = {
+                                    "url": results_uri,
+                                    "results": event
+                                }
+
+                                # if results_chunk:
+                                #    devt["linecount"] = len(results_chunk.text.split("\n"))
+
+                                yield {
+                                    "_raw": json.dumps(devt),
+                                    "_time": time.time(),
+                                    "source": "goatsearch",
+                                    "sourcetype": "goatsearch:json",
+                                    "host": "localhost"
+                                }
+
+                            if 'totalEventCount' in event.keys():
+                                self.total_event_count = event['totalEventCount']
+
+    def prepare(self):
+        self._record_writer._inspector['messages'] = []
+        self.write_info("Getting environment settings.")
+
+        self._get_environment()
+
+        self._record_writer._inspector['messages'] = []
+        self.write_info("Getting authentication token.")
+        self._get_auth_token()
+
+        self.headers = {
+            'Authorization': 'Bearer %s' % self.access_token,
+            'Content-Type': 'application/json'
+        }
+
+        # TODO: Placeholder. This is hard-coded in the API documentation but the format suggests
+        #       it could be a variable for a coming feature.
+        self.search_context = 'default_search'
+
+        if self.query:
+            self._prepare_event_search()
+
+        if self.page:
+            self.api_limit = int(self.page)
 
 dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)

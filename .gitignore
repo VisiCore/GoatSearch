@@ -13,3 +13,4 @@ dist/*
 bin/packages/*
 !bin/packages/README
 goatsearch.py.exp
+goatsearch.py.bak
