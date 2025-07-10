@@ -52,6 +52,7 @@
             | savedsearch sysGetWorkspaceList tenant="$tokenSelectedTenant$"
           </query>
         </search>
+        <default>main</default>
         <change>
           <eval token="workspaceString">if (isnull($value$), "", " workspace=\"" + $value$ + "\"")</eval>
         </change>
@@ -121,7 +122,7 @@
         <fieldForValue>id</fieldForValue>
         <search>
           <query>
-            | savedsearch sysGetDatasets tenant="$tokenSelectedTenant$"
+            | savedsearch sysGetDatasets tenant="$tokenSelectedTenant$" workspace="$tokenSelectedWorkspace$"
           </query>
         </search>
         <default>cribl_internal_logs</default>
