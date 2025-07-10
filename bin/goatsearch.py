@@ -305,10 +305,11 @@ class goatsearch(GeneratingCommand):
                                 'sourcetype': event['datatype']
                             }
 
-                            raw_dict = json.loads(event['_raw'])
+                            if type(event['_raw']) is dict:
+                                raw_dict = json.loads(event['_raw'])
 
-                            for k, v in raw_dict.items():
-                                evt[k]= v
+                                for k, v in raw_dict.items():
+                                    evt[k]= v
 
                             yield evt
 
