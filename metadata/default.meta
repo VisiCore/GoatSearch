@@ -1,11 +1,16 @@
-# VisiCore GoatSearch version 1.0.1 (25)
-# default.meta: packaged 07/10/2025 by Duck Yeah! version 3.0.0
+# VisiCore GoatSearch version 1.0.1 (28).
+# default.meta: packaged at 21:41:00 on 07/10/2025 by Duck Yeah! version 3.0.0.
 # Please do not modify this header manually. It is required by Duck Yeah!.
 #
 # Want Duck Yeah!? Download from Splunkbase: https://splunkbase.splunk.com/app/7015
 #
 # Contributors: 
 # +Paul Stout <paul@inversetachyon.com>
+#
+# Implements: 
+# @GIT-10
+# @GIT-3
+# @GIT-9
 
 []
 access = read : [ * ], write : [ admin, sc_admin ]
@@ -77,6 +82,20 @@ modtime = 1752150557.241755000
 owner = nobody
 version = 9.2.1
 
+[savedsearches/sysGetDefaultTenant]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1752180049.645846000
+owner = nobody
+version = 9.2.1
+
+[savedsearches/sysGetSampleEvent]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+modtime = 1752179811.824992000
+owner = nobody
+version = 9.2.1
+
 [savedsearches/sysGetTenantList]
 access = read : [ * ], write : [ admin, sc_admin ]
 export = none
@@ -134,7 +153,7 @@ owner = nobody
 
 [views/goatsearch_explorer]
 access = read : [ * ], write : [ admin, sc_admin ]
-modtime = 1752150618.751511000
+modtime = 1752183038.912656000
 owner = nobody
 version = 9.2.1
 

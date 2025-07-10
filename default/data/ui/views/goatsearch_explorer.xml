@@ -16,6 +16,7 @@
     </done>
   </search>
   <label>GoatSearch Explorer</label>
+  <fieldset submitButton="false"></fieldset>
   <row>
     <panel>
       <html>
@@ -77,7 +78,7 @@
         <change>
           <eval token="pageSizeString">if (isnull($value$), "", " page=\"" + $value$ + "\"")</eval>
         </change>
-    </input>
+      </input>
     </panel>
     <panel>
       <input type="checkbox" token="tokenSelectSampleRatio">
@@ -98,7 +99,7 @@
         <change>
           <eval token="sampleRatioString">if (isnull($value$), "", " sample=\"" + $value$ + "\"")</eval>
         </change>
-    </input>
+      </input>
     </panel>
   </row>
   <row>
@@ -144,6 +145,25 @@
           <span class="tooltiptext tooltip-bottom">Open in Search...</span>
         </i>
       </html>
+    </panel>
+  </row>
+  <row depends="$tokenSelectedTenant$">
+    <panel>
+      <title>Event Preview</title>
+      <html>
+        <p>
+          Event previews are limited to the last 5 minutes of data for efficiency. If your data are older than 5 minutes, please use the Cribl Search Query above to explore.
+        </p>
+      </html>
+      <event>
+        <search>
+          <query>
+            | savedsearch sysGetSampleEvent tenant="$tokenSelectedTenant$" workspace="$tokenSelectedWorkspace$" dataset="$tokenSelectedDataset$"
+          </query>
+          <earliest>-5m</earliest>
+          <latest>now</latest>
+        </search>
+      </event>
     </panel>
   </row>
 </form>

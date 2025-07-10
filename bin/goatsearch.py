@@ -4,6 +4,7 @@ import json
 import os
 import re
 import requests
+import socket
 import sys
 import time
 
@@ -22,6 +23,7 @@ class goatsearch(GeneratingCommand):
     debug = Option(require=False, validate=validators.Boolean())
     earliest = Option(require=False, validate=None)
     latest = Option(require=False, validate=None)
+    sid = Option(require=False, validate=None)
 
     access_token = False
 
@@ -139,6 +141,11 @@ class goatsearch(GeneratingCommand):
             self.search_context
         )
 
+        if self.sid:
+            self.job_id = self.sid
+
+            return
+
         if self.debug:
             devt = {
                 "url": self.baseuri
@@ -183,7 +190,10 @@ class goatsearch(GeneratingCommand):
         # TODO: Check that we actually retrieved a job ID
 
     def generate(self):
-        if not self.query:
+        earliest_seen = 0
+        latest_seen = 0
+
+        if not self.query and not self.sid:
             dataseturi = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/datasets' % (
                 self.v_workspace,
                 self.v_tenant,
@@ -297,6 +307,12 @@ class goatsearch(GeneratingCommand):
                         event = json.loads(line)
 
                         if '_raw' in event:
+                            if event['_time'] < earliest_seen or earliest_seen == 0:
+                                earliest_seen = event['_time']
+
+                            if event['_time'] > latest_seen or latest_seen == 0:
+                                latest_seen = event['_time']
+
                             evt = {
                                 '_raw': event['_raw'],
                                 '_time': event['_time'],
@@ -305,11 +321,12 @@ class goatsearch(GeneratingCommand):
                                 'sourcetype': event['datatype']
                             }
 
-                            if type(event['_raw']) is dict:
-                                raw_dict = json.loads(event['_raw'])
+                            if 'instance' in event and 'datatype' in event and event['datatype'] == 'cribl_json':
+                                evt['host'] = event['instance']
 
-                                for k, v in raw_dict.items():
-                                    evt[k]= v
+                            for k, v in event.items():
+                                if k[0] != '_':
+                                    evt[k] = v
 
                             yield evt
 
@@ -338,6 +355,13 @@ class goatsearch(GeneratingCommand):
 
                     self.flush()
 
+            if earliest_seen > 0:
+                self.metadata.searchinfo.earliest_time = earliest_seen
+
+            if latest_seen > 0 and latest_seen == 0:
+                self.metadata.searchinfo.latest_time = latest_seen
+
+
     def prepare(self):
         self._record_writer._inspector['messages'] = []
         self.write_info("Getting environment settings.")
@@ -357,7 +381,7 @@ class goatsearch(GeneratingCommand):
         #       it could be a variable for a coming feature.
         self.search_context = 'default_search'
 
-        if self.query:
+        if self.query or self.sid:
             self._prepare_event_search()
 
         if self.page:
