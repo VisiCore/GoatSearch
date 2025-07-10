@@ -15,11 +15,13 @@ from splunklib.searchcommands import \
 @Configuration(local=True, type='events', retainsevents=True)
 class goatsearch(GeneratingCommand):
     query = Option(require=False, validate=None)
-    sample = Option(require=False, validate=None)
+    sample = Option(require=False, validate=validators.Integer())
     page = Option(require=False, validate=validators.Integer())
     tenant = Option(require=False, validate=None)
     workspace = Option(require=False, validate=None)
     debug = Option(require=False, validate=validators.Boolean())
+    earliest = Option(require=False, validate=None)
+    latest = Option(require=False, validate=None)
 
     access_token = False
 
@@ -332,6 +334,8 @@ class goatsearch(GeneratingCommand):
 
                             if 'totalEventCount' in event.keys():
                                 self.total_event_count = event['totalEventCount']
+
+                    self.flush()
 
     def prepare(self):
         self._record_writer._inspector['messages'] = []
