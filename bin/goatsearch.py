@@ -24,6 +24,7 @@ class goatsearch(GeneratingCommand):
     earliest = Option(require=False, validate=None)
     latest = Option(require=False, validate=None)
     sid = Option(require=False, validate=None)
+    retry = Option(require=False, validate=validators.Integer())
 
     access_token = False
 
@@ -141,53 +142,83 @@ class goatsearch(GeneratingCommand):
             self.search_context
         )
 
-        if self.sid:
-            self.job_id = self.sid
+        if not self.retry:
+            retry = 10
+        else:
+            retry = int(self.retry)
 
-            return
+        current = 0
 
-        if self.debug:
-            devt = {
-                "url": self.baseuri
+        while current < retry:
+            if self.sid:
+                self.job_id = self.sid
+
+                return True
+
+            if self.debug:
+                devt = {
+                    "url": self.baseuri
+                }
+
+                self.event_log.append({
+                    "_raw": json.dumps(devt),
+                    "_time": time.time(),
+                    "source": "goatsearch",
+                    "sourcetype": "goatsearch:json",
+                    "host": "localhost"
+                })
+
+            if not self.sample:
+                sample_ratio = 1
+            else:
+                sample_ratio = 1 / int(self.sample)
+
+            job = {
+                'query': 'cribl %s' % self.query,
+                'earliest': earliest,
+                'latest': latest,
+                'sampleRate': sample_ratio
             }
 
-            self.event_log.append({
-                "_raw": json.dumps(devt),
-                "_time": time.time(),
-                "source": "goatsearch",
-                "sourcetype": "goatsearch:json",
-                "host": "localhost"
-            })
+            # TODO: Require sample to be an integer (and possibly a power of 10)
 
-        if not self.sample:
-            sample_ratio = 1
-        else:
-            sample_ratio = 1 / int(self.sample)
+            search_job = requests.post(
+                self.baseuri,
+                json = job,
+                headers = self.headers
+            )
 
-        job = {
-            'query': 'cribl %s' % self.query,
-            'earliest': earliest,
-            'latest': latest,
-            'sampleRate': sample_ratio
-        }
+            job_deets = json.loads(search_job.text)
 
-        # TODO: Require sample to be an integer (and possibly a power of 10)
+            # TODO: Check that this is an expected { "items: [] } format
 
-        search_job = requests.post(
-            self.baseuri,
-            json = job,
-            headers = self.headers
-        )
+            if not 'items' in job_deets:
+                devt = {
+                    "url": self.baseuri,
+                    "message": 'Missing Items',
+                    "job": job_deets
+                }
+   
+                # self.write_error(json.dumps(job_deets))
+ 
+                self.event_log.append({
+                    "_raw": json.dumps(devt),
+                    "_time": time.time(),
+                    "source": "goatsearch",
+                    "sourcetype": "goatsearch:json",
+                    "host": "localhost"
+                })
+            else:
+                for deet in job_deets['items']:
+                    if 'id' in deet:
+                        self.job_id = deet['id']
 
-        job_deets = json.loads(search_job.text)
+                        return True
 
-        # TODO: Check that this is an expected { "items: [] } format
+            current = current + 1
+            time.sleep(5)
 
-        for deet in job_deets['items']:
-            if 'id' in deet:
-                self.job_id = deet['id']
-
-        # TODO: Check that we actually retrieved a job ID
+        return False
 
     def generate(self):
         earliest_seen = 0
@@ -222,6 +253,11 @@ class goatsearch(GeneratingCommand):
                 yield evt
 
         else:
+            if not self.job_id:
+                for evt in self.event_log:
+                    yield evt
+
+                return
             while not self.job_complete:
                 status_uri = '%s/%s/status' % (
                     self.baseuri,
