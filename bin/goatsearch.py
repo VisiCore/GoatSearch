@@ -315,10 +315,10 @@ class goatsearch(GeneratingCommand):
 
                             evt = {
                                 '_raw': event['_raw'],
-                                '_time': event['_time'],
-                                'index': event['dataset'],
-                                'source': event['source'],
-                                'sourcetype': event['datatype']
+                                '_time': event['_time'] if '_time' in event else time.time(),
+                                'index': event['dataset'] if 'dataset' in event else 'unknown',
+                                'source': event['source'] if 'source' in event else 'unknown',
+                                'sourcetype': event['datatype'] if 'datatype' in event else 'unknown'
                             }
 
                             if 'instance' in event and 'datatype' in event and event['datatype'] == 'cribl_json':
