@@ -299,6 +299,10 @@ class goatsearch(GeneratingCommand):
 
                 statuses = json.loads(status.text)
 
+                if not 'items' in statuses:
+                    yield { '_raw': json.dumps(statuses) }
+                    return
+
                 for job_status in statuses['items']:
                     # Is statuses a word? Stati?
 
