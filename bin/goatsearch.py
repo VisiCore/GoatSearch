@@ -342,33 +342,7 @@ class goatsearch(GeneratingCommand):
                     for line in results_chunk.iter_lines():
                         event = json.loads(line)
 
-                        if '_raw' in event:
-                            if event['_time'] < earliest_seen or earliest_seen == 0:
-                                earliest_seen = event['_time']
-
-                            if event['_time'] > latest_seen or latest_seen == 0:
-                                latest_seen = event['_time']
-
-                            evt = {
-                                '_raw': event['_raw'],
-                                '_time': event['_time'] if '_time' in event else time.time(),
-                                'index': event['dataset'] if 'dataset' in event else 'unknown',
-                                'source': event['source'] if 'source' in event else 'unknown',
-                                'sourcetype': event['datatype'] if 'datatype' in event else 'unknown'
-                            }
-
-                            if 'instance' in event and 'datatype' in event and event['datatype'] == 'cribl_json':
-                                evt['host'] = event['instance']
-
-                            for k, v in event.items():
-                                if k[0] != '_':
-                                    evt[k] = v
-
-                            yield evt
-
-                            self.offset = self.offset + 1
-                            collecting = True
-                        else:
+                        if 'totalEventCount' in event:
                             if self.debug:
                                 devt = {
                                     "url": results_uri,
@@ -388,6 +362,36 @@ class goatsearch(GeneratingCommand):
 
                             if 'totalEventCount' in event.keys():
                                 self.total_event_count = event['totalEventCount']
+                        else:
+                            if '_time' in event:
+                                if event['_time'] < earliest_seen or earliest_seen == 0:
+                                    earliest_seen = event['_time']
+
+                                if event['_time'] > latest_seen or latest_seen == 0:
+                                    latest_seen = event['_time']
+                            else:
+                                earliest_seen = time.time()
+                                latest_seen = time.time()
+
+                            evt = {
+                                '_raw': event['_raw'] if '_raw' in event else json.dumps(event),
+                                '_time': event['_time'] if '_time' in event else time.time(),
+                                'index': event['dataset'] if 'dataset' in event else 'unknown',
+                                'source': event['source'] if 'source' in event else 'unknown',
+                                'sourcetype': event['datatype'] if 'datatype' in event else 'unknown'
+                            }
+
+                            if 'instance' in event and 'datatype' in event and event['datatype'] == 'cribl_json':
+                                evt['host'] = event['instance']
+
+                            for k, v in event.items():
+                                if k[0] != '_':
+                                    evt[k] = v
+
+                            yield evt
+
+                            self.offset = self.offset + 1
+                            collecting = True
 
                     self.flush()
 
