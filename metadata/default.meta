@@ -1,23 +1,11 @@
-# VisiCore GoatSearch version 1.0.1 (36).
-# default.meta: packaged at 20:12:46 on 07/15/2025 by Duck Yeah! version 3.0.0.
+# VisiCore GoatSearch version 1.0.9 (37)
+# default.meta: packaged 07/15/2025 by Duck Yeah! version 3.0.0
 # Please do not modify this header manually. It is required by Duck Yeah!.
 #
 # Want Duck Yeah!? Download from Splunkbase: https://splunkbase.splunk.com/app/7015
 #
 # Contributors: 
 # +Paul Stout <paul@inversetachyon.com>
-#
-# Implements: 
-# @GIT-10
-# @GIT-11
-# @GIT-12
-# @GIT-13
-# @GIT-2
-# @GIT-3
-# @GIT-4
-# @GIT-5
-# @GIT-6
-# @GIT-9
 
 []
 access = read : [ * ], write : [ admin, sc_admin ]
