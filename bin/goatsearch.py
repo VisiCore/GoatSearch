@@ -4,6 +4,7 @@ import json
 import os
 import re
 import requests
+import socket
 import sys
 import time
 
@@ -22,6 +23,8 @@ class goatsearch(GeneratingCommand):
     debug = Option(require=False, validate=validators.Boolean())
     earliest = Option(require=False, validate=None)
     latest = Option(require=False, validate=None)
+    sid = Option(require=False, validate=None)
+    retry = Option(require=False, validate=validators.Integer())
 
     access_token = False
 
@@ -46,6 +49,8 @@ class goatsearch(GeneratingCommand):
     total_event_count = 0
     offset = 0
     api_limit = 200
+
+    can_run = False
 
     def _get_auth_token(self):
         # TODO: Take this from the .conf/password object
@@ -125,8 +130,15 @@ class goatsearch(GeneratingCommand):
         return False
 
     def _prepare_event_search(self):
-        earliest = self.metadata.searchinfo.earliest_time
-        latest = self.metadata.searchinfo.latest_time
+        if self.earliest is None:
+            earliest = self.metadata.searchinfo.earliest_time
+        else:
+            earliest = self.earliest
+
+        if self.latest is None:
+            latest = self.metadata.searchinfo.latest_time
+        else:
+            latest = self.latest
 
         goatevent = {
             "data": {},
@@ -139,51 +151,92 @@ class goatsearch(GeneratingCommand):
             self.search_context
         )
 
-        if self.debug:
-            devt = {
-                "url": self.baseuri
+        if not self.retry:
+            retry = 10
+        else:
+            retry = int(self.retry)
+
+        current = 0
+
+        while current < retry:
+            if self.sid:
+                self.job_id = self.sid
+
+                return True
+
+            if self.debug:
+                devt = {
+                    "url": self.baseuri
+                }
+
+                self.event_log.append({
+                    "_raw": json.dumps(devt),
+                    "_time": time.time(),
+                    "source": "goatsearch",
+                    "sourcetype": "goatsearch:json",
+                    "host": "localhost"
+                })
+
+            if not self.sample:
+                sample_ratio = 1
+            else:
+                sample_ratio = 1 / int(self.sample)
+
+            job = {
+                'query': 'cribl %s' % self.query,
+                'earliest': earliest,
+                'latest': latest,
+                'sampleRate': sample_ratio
             }
 
-            self.event_log.append({
-                "_raw": json.dumps(devt),
-                "_time": time.time(),
-                "source": "goatsearch",
-                "sourcetype": "goatsearch:json",
-                "host": "localhost"
-            })
+            # TODO: Require sample to be an integer (and possibly a power of 10)
 
-        if not self.sample:
-            sample_ratio = 1
-        else:
-            sample_ratio = 1 / int(self.sample)
+            search_job = requests.post(
+                self.baseuri,
+                json = job,
+                headers = self.headers
+            )
 
-        job = {
-            'query': 'cribl %s' % self.query,
-            'earliest': earliest,
-            'latest': latest,
-            'sampleRate': sample_ratio
-        }
+            job_deets = json.loads(search_job.text)
 
-        # TODO: Require sample to be an integer (and possibly a power of 10)
+            # TODO: Check that this is an expected { "items: [] } format
 
-        search_job = requests.post(
-            self.baseuri,
-            json = job,
-            headers = self.headers
-        )
+            if not 'items' in job_deets:
+                devt = {
+                    "url": self.baseuri,
+                    "message": 'Missing Items',
+                    "job": job_deets
+                }
+   
+                # self.write_error(json.dumps(job_deets))
+ 
+                self.event_log.append({
+                    "_raw": json.dumps(devt),
+                    "_time": time.time(),
+                    "source": "goatsearch",
+                    "sourcetype": "goatsearch:json",
+                    "host": "localhost"
+                })
+            else:
+                for deet in job_deets['items']:
+                    if 'id' in deet:
+                        self.job_id = deet['id']
 
-        job_deets = json.loads(search_job.text)
+                        return True
 
-        # TODO: Check that this is an expected { "items: [] } format
+            current = current + 1
+            time.sleep(5)
 
-        for deet in job_deets['items']:
-            if 'id' in deet:
-                self.job_id = deet['id']
-
-        # TODO: Check that we actually retrieved a job ID
+        return False
 
     def generate(self):
-        if not self.query:
+        if not self.can_run:
+            return
+
+        earliest_seen = 0
+        latest_seen = 0
+
+        if not self.query and not self.sid:
             dataseturi = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/datasets' % (
                 self.v_workspace,
                 self.v_tenant,
@@ -212,6 +265,11 @@ class goatsearch(GeneratingCommand):
                 yield evt
 
         else:
+            if not self.job_id:
+                for evt in self.event_log:
+                    yield evt
+
+                return
             while not self.job_complete:
                 status_uri = '%s/%s/status' % (
                     self.baseuri,
@@ -296,26 +354,7 @@ class goatsearch(GeneratingCommand):
                     for line in results_chunk.iter_lines():
                         event = json.loads(line)
 
-                        if '_raw' in event:
-                            evt = {
-                                '_raw': event['_raw'],
-                                '_time': event['_time'],
-                                'index': event['dataset'],
-                                'source': event['source'],
-                                'sourcetype': event['datatype']
-                            }
-
-                            if type(event['_raw']) is dict:
-                                raw_dict = json.loads(event['_raw'])
-
-                                for k, v in raw_dict.items():
-                                    evt[k]= v
-
-                            yield evt
-
-                            self.offset = self.offset + 1
-                            collecting = True
-                        else:
+                        if 'totalEventCount' in event:
                             if self.debug:
                                 devt = {
                                     "url": results_uri,
@@ -335,10 +374,57 @@ class goatsearch(GeneratingCommand):
 
                             if 'totalEventCount' in event.keys():
                                 self.total_event_count = event['totalEventCount']
+                        else:
+                            if '_time' in event:
+                                if event['_time'] < earliest_seen or earliest_seen == 0:
+                                    earliest_seen = event['_time']
+
+                                if event['_time'] > latest_seen or latest_seen == 0:
+                                    latest_seen = event['_time']
+                            else:
+                                earliest_seen = time.time()
+                                latest_seen = time.time()
+
+                            evt = {
+                                '_raw': event['_raw'] if '_raw' in event else json.dumps(event),
+                                '_time': event['_time'] if '_time' in event else time.time(),
+                                'index': event['dataset'] if 'dataset' in event else 'unknown',
+                                'source': event['source'] if 'source' in event else 'unknown',
+                                'sourcetype': event['datatype'] if 'datatype' in event else 'unknown'
+                            }
+
+                            if 'instance' in event and 'datatype' in event and event['datatype'] == 'cribl_json':
+                                evt['host'] = event['instance']
+
+                            for k, v in event.items():
+                                if k[0] != '_':
+                                    evt[k] = v
+
+                            yield evt
+
+                            self.offset = self.offset + 1
+                            collecting = True
 
                     self.flush()
 
+            if earliest_seen > 0:
+                self.metadata.searchinfo.earliest_time = earliest_seen
+
+            if latest_seen > 0 and latest_seen == 0:
+                self.metadata.searchinfo.latest_time = latest_seen
+
+
     def prepare(self):
+        user = self._metadata.searchinfo.username
+
+        caps = self.service.users[user]['capabilities']
+
+        if not 'goatsearch_user' in caps:
+            self.write_error("You must have the 'goatsearch_user' capability to use this command.")
+            return
+
+        self.can_run = True
+
         self._record_writer._inspector['messages'] = []
         self.write_info("Getting environment settings.")
 
@@ -357,7 +443,7 @@ class goatsearch(GeneratingCommand):
         #       it could be a variable for a coming feature.
         self.search_context = 'default_search'
 
-        if self.query:
+        if self.query or self.sid:
             self._prepare_event_search()
 
         if self.page:
