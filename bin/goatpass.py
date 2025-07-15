@@ -13,7 +13,17 @@ from splunklib.searchcommands import \
 class goatpass(StreamingCommand):
     delete = Option(require=False, validate=None)
 
+    can_run = False
+
     def stream(self, events):
+        if not self.can_run:
+            for event in events:
+                event['clientSecret'] = '<<DENIED>>'
+
+                yield event
+
+            return
+
         # TODO: Make sure the _key, tenant, and password fields are there.
 
         storage_passwords = self.service.storage_passwords
@@ -79,5 +89,16 @@ class goatpass(StreamingCommand):
                     event['clientSecret'] = '<<MISSING_FIELDS>>'
 
                 yield event
- 
+
+    def prepare(self):
+        user = self._metadata.searchinfo.username
+
+        caps = self.service.users[user]['capabilities']
+
+        if not 'goatsearch_admin' in caps:
+            self.write_error("You must have the 'goatsearch_admin' capability to use this command.")
+            return
+
+        self.can_run = True 
+
 dispatch(goatpass, sys.argv, sys.stdin, sys.stdout, __name__)

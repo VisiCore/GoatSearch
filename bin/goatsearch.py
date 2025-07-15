@@ -50,6 +50,8 @@ class goatsearch(GeneratingCommand):
     offset = 0
     api_limit = 200
 
+    can_run = False
+
     def _get_auth_token(self):
         # TODO: Take this from the .conf/password object
         # TODO: Maybe make the audience configurable?
@@ -128,8 +130,15 @@ class goatsearch(GeneratingCommand):
         return False
 
     def _prepare_event_search(self):
-        earliest = self.metadata.searchinfo.earliest_time
-        latest = self.metadata.searchinfo.latest_time
+        if self.earliest is None:
+            earliest = self.metadata.searchinfo.earliest_time
+        else:
+            earliest = self.earliest
+
+        if self.latest is None:
+            latest = self.metadata.searchinfo.latest_time
+        else:
+            latest = self.latest
 
         goatevent = {
             "data": {},
@@ -221,6 +230,9 @@ class goatsearch(GeneratingCommand):
         return False
 
     def generate(self):
+        if not self.can_run:
+            return
+
         earliest_seen = 0
         latest_seen = 0
 
@@ -403,6 +415,16 @@ class goatsearch(GeneratingCommand):
 
 
     def prepare(self):
+        user = self._metadata.searchinfo.username
+
+        caps = self.service.users[user]['capabilities']
+
+        if not 'goatsearch_user' in caps:
+            self.write_error("You must have the 'goatsearch_user' capability to use this command.")
+            return
+
+        self.can_run = True
+
         self._record_writer._inspector['messages'] = []
         self.write_info("Getting environment settings.")
 
