@@ -265,11 +265,18 @@ class goatsearch(GeneratingCommand):
                 yield evt
 
         else:
+            if self.query or self.sid:
+                self._prepare_event_search()
+
+            if self.page:
+                self.api_limit = int(self.page)
+
             if not self.job_id:
                 for evt in self.event_log:
                     yield evt
 
                 return
+
             while not self.job_complete:
                 status_uri = '%s/%s/status' % (
                     self.baseuri,
@@ -417,6 +424,9 @@ class goatsearch(GeneratingCommand):
             if latest_seen > 0 and latest_seen == 0:
                 self.metadata.searchinfo.latest_time = latest_seen
 
+            if self.debug:
+                for evt in self.event_log:
+                    yield evt
 
     def prepare(self):
         user = self._metadata.searchinfo.username
@@ -446,11 +456,5 @@ class goatsearch(GeneratingCommand):
         # TODO: Placeholder. This is hard-coded in the API documentation but the format suggests
         #       it could be a variable for a coming feature.
         self.search_context = 'default_search'
-
-        if self.query or self.sid:
-            self._prepare_event_search()
-
-        if self.page:
-            self.api_limit = int(self.page)
 
 dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)
