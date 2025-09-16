@@ -7,13 +7,19 @@ import requests
 import socket
 import sys
 import time
+import atexit
+import threading
+from queue import Queue, Empty
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
+from splunklib.searchcommands.internals import RecordWriterV2
 from splunklib.searchcommands import \
     dispatch, GeneratingCommand, Configuration, Option, validators
 
-@Configuration(local=True, type='events', retainsevents=True)
+
+@Configuration(local=True, type='streaming', distributed=False)
 class goatsearch(GeneratingCommand):
     query = Option(require=False, validate=None)
     sample = Option(require=False, validate=validators.Integer())
@@ -52,7 +58,70 @@ class goatsearch(GeneratingCommand):
 
     can_run = False
 
+    # Track user stop requests
+    _finalizing = False
+
+    def init_messages(self):
+        """ Initialize the messages array in the inspector. """
+        assert isinstance(self._record_writer, RecordWriterV2)
+        if 'messages' not in self._record_writer._inspector:
+            self._record_writer._inspector['messages'] = []
+
+    def set_prop_on_file_create(self, file_path, obj, attr_name):
+        """ Set an attribute on an object to True when a file is created. 
+        Used to monitor for the 'finalize' file in the dispatch directory. """
+        def monitor():
+            try:
+                while not getattr(obj, attr_name) and not os.path.exists(file_path):
+                    time.sleep(0.25)
+                if os.path.exists(file_path):
+                    print(f"File created: {file_path}, setting {type(obj).__name__}.{attr_name}=True", file=sys.stderr)
+                    setattr(obj, attr_name, True)
+            except Exception as e:
+                print(f"Exception in monitor thread: {e}", file=sys.stderr)
+        threading.Thread(target=monitor, daemon=True).start()
+        # Force the attribute to True on exit to avoid hanging threads
+        atexit.register(lambda: setattr(obj, attr_name, True))
+
+    # Emit messages at the speed they are produced
+    def set_flush_size(self, flush_size: int=1000):
+        """ Set the flush size for the record writer. """
+        assert isinstance(self._record_writer, RecordWriterV2)
+        if self._record_writer._maxresultrows != flush_size:
+            self._record_writer._maxresultrows = flush_size
+            print(f"Set flush size to {flush_size}", file=sys.stderr)
+
+    @staticmethod
+    def format_timestamp(ts):
+        """ Format an epoch timestamp to a human-readable string. """
+        return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+
+    # Try to make the timeliner work correctly
+    def update_earliest_latest(self, earliest, latest):
+        """ Update the earliest and latest times in the search metadata. """
+        if earliest > 0:
+            try:
+                earliest_ts = float(earliest)
+                self._metadata.searchinfo.earliest_time = earliest
+                self.search_results_info.api_et = earliest
+                self.search_results_info.search_et = earliest
+                self.search_results_info.startTime = earliest
+            except ValueError:
+                print(f"Invalid earliest time: {earliest}", file=sys.stderr)
+
+        if latest > 0:
+            try:
+                latest_ts = float(latest)
+                self._metadata.searchinfo.latest_time = latest_ts
+                self.search_results_info.api_lt = latest_ts
+                self.search_results_info.search_lt = latest_ts
+                self.search_results_info.endTime = latest_ts
+                #self.search_results_info.now
+            except ValueError:
+                print(f"Invalid latest time: {latest}", file=sys.stderr)
+
     def _get_auth_token(self):
+        """ Get an OAuth token from Cribl Cloud. """
         # TODO: Take this from the .conf/password object
         # TODO: Maybe make the audience configurable?
 
@@ -130,6 +199,7 @@ class goatsearch(GeneratingCommand):
         return False
 
     def _prepare_event_search(self):
+
         if self.earliest is None:
             earliest = self.metadata.searchinfo.earliest_time
         else:
@@ -232,6 +302,14 @@ class goatsearch(GeneratingCommand):
     def generate(self):
         if not self.can_run:
             return
+        
+        # Set the flush size to 1 yielded event
+        self.set_flush_size(1)
+
+        # Monitor for the finalize file in the dispatch directory
+        # If the file appears, the user clicked stop. Sets self._finalizing to True
+        self.set_prop_on_file_create(
+            os.path.join(self.metadata.searchinfo.dispatch_dir, 'finalize'), self, '_finalizing')
 
         earliest_seen = 0
         latest_seen = 0
@@ -277,64 +355,77 @@ class goatsearch(GeneratingCommand):
 
                 return
 
-            while not self.job_complete:
+            latest_status: str = ""
+            while not self.job_complete and not getattr(self, '_finalizing', False):
                 status_uri = '%s/%s/status' % (
                     self.baseuri,
                     self.job_id
                 )
 
-                status = requests.get(
+                status_response = requests.get(
                     status_uri,
                     headers = self.headers
                 )
 
+                statuses = json.loads(status_response.text)
+                status_obj = statuses.get('items', [])[0] if 'items' in statuses else {}
+                latest_status = status_obj.get('status', latest_status)
+
                 if self.debug:
                     devt = {
-                        "url": status_uri,
-                        "status": json.loads(status.text)
-                    }
-
-                    yield {
-                        "_raw": json.dumps(devt),
+                        "_raw": json.dumps({
+                            "url": status_uri,
+                            "status": status_obj
+                        }),
                         "_time": time.time(),
                         "source": "goatsearch",
                         "sourcetype": "goatsearch:json",
-                        "host": "localhost"
+                        "host": "localhost",
+                        **status_obj
                     }
+                    yield devt
 
                 # TODO: Make sure that this is an expected { "items: [] } format
-
-                statuses = json.loads(status.text)
-
                 if not 'items' in statuses:
                     yield { '_raw': json.dumps(statuses) }
                     return
 
                 for job_status in statuses['items']:
                     # Is statuses a word? Stati?
-
+                    latest_status = job_status.get('status', latest_status)
                     # TODO: Add some sort of status notifier or job duration. Maybe we can hijack the error mechanism for this.
                     #       ... if I can that would be my most advanced UI hijack to date...
 
                     if 'totalEventCount' in job_status and job_status['totalEventCount'] > self.total_event_count:
                         total_event_count = job_status['totalEventCount']
 
-                    if 'status' in job_status and job_status['status'] == 'completed':
+                    if latest_status == 'completed':
                         self.job_complete = True
 
                         if not self.complete_notice:
                             self._record_writer._inspector['messages'] = []
                             self.write_info('Cribl Search job complete.')
 
-                    if 'status' in job_status and job_status['status'] == 'queued' and not self.queue_notice:
+                    if latest_status == 'queued' and not self.queue_notice:
                         self._record_writer._inspector['messages'] = []
-                        self.write_warning('Waiting for queued Cribl Search job to start.')
+                        self.write_info('Waiting for queued Cribl Search job to start.')
                         self.queue_notice = True
 
-                    if 'status' in job_status and job_status['status'] == 'running' and not self.running_notice:
+                    if latest_status == 'running' and not self.running_notice:
                         self._record_writer._inspector['messages'] = []
                         self.write_info('Cribl Search job is running.')
                         self.running_notice = True
+                
+                # Terminate if the job has failed or been canceled
+                if latest_status in ['failed', 'canceled']:
+                    self._write_error(f"Cribl Search job {self.job_id} has status={status_obj}.")
+                    break
+
+                # Don't attempt to collect results until the job is running or complete
+                if latest_status not in ['completed', 'running']:
+                    print("Job not running or complete, waiting...", file=sys.stderr)
+                    time.sleep(0.5)
+                    continue
 
                 # TODO: Do something when no results
 
@@ -342,7 +433,9 @@ class goatsearch(GeneratingCommand):
 
                 collecting = True
 
-                while collecting:
+                # Set the flush size to match the page size
+                self.set_flush_size(self.api_limit)
+                while collecting and not getattr(self, '_finalizing', False):
                     collecting = False
 
                     results_uri = '%s/%s/results?limit=%s&offset=%s' % (
@@ -362,11 +455,20 @@ class goatsearch(GeneratingCommand):
                         stream = True
                     )
 
+                    self.set_flush_size(self.api_limit)
                     for line in results_chunk.iter_lines():
+                        if self._finalizing:
+                            break
                         event = json.loads(line)
 
                         if 'totalEventCount' in event:
+                            # Response metadata event handling
                             if self.debug:
+                                # Emit messages as they are generated
+                                if self.offset == 0:
+                                    self.set_flush_size(1)
+                                else:
+                                    self.set_flush_size(self.api_limit)
                                 devt = {
                                     "url": results_uri,
                                     "results": event
@@ -380,21 +482,20 @@ class goatsearch(GeneratingCommand):
                                     "_time": time.time(),
                                     "source": "goatsearch",
                                     "sourcetype": "goatsearch:json",
-                                    "host": "localhost"
+                                    "host": "localhost",
+                                    **event.get('items', {})
                                 }
-
+                            latest_status = event.get('job', {}).get('status', latest_status)
                             if 'totalEventCount' in event.keys():
                                 self.total_event_count = event['totalEventCount']
                         else:
+                            # Search result handling
                             if '_time' in event:
                                 if event['_time'] < earliest_seen or earliest_seen == 0:
                                     earliest_seen = event['_time']
 
                                 if event['_time'] > latest_seen or latest_seen == 0:
                                     latest_seen = event['_time']
-                            else:
-                                earliest_seen = time.time()
-                                latest_seen = time.time()
 
                             evt = {
                                 '_raw': event['_raw'] if '_raw' in event else json.dumps(event),
@@ -412,17 +513,16 @@ class goatsearch(GeneratingCommand):
                                     evt[k] = v
 
                             yield evt
-
                             self.offset = self.offset + 1
+
                             collecting = True
-
+                    if self.debug:
+                        print("Record count=%s" % self.offset, file=sys.stderr)
+                    # Update the search metadata earliest/latest times (timeliner fix?)
+                    self.update_earliest_latest(earliest_seen, latest_seen)
+                    # Avoid overwhelming the API
+                    time.sleep(0.1)
                     self.flush()
-
-            if earliest_seen > 0:
-                self.metadata.searchinfo.earliest_time = earliest_seen
-
-            if latest_seen > 0 and latest_seen == 0:
-                self.metadata.searchinfo.latest_time = latest_seen
 
             if self.debug:
                 for evt in self.event_log:
@@ -441,12 +541,12 @@ class goatsearch(GeneratingCommand):
 
         self._record_writer._inspector['messages'] = []
         self.write_info("Getting environment settings.")
-
         self._get_environment()
 
         self._record_writer._inspector['messages'] = []
         self.write_info("Getting authentication token.")
         self._get_auth_token()
+        self._record_writer._inspector['messages'] = []
 
         self.headers = {
             'Authorization': 'Bearer %s' % self.access_token,
@@ -456,5 +556,6 @@ class goatsearch(GeneratingCommand):
         # TODO: Placeholder. This is hard-coded in the API documentation but the format suggests
         #       it could be a variable for a coming feature.
         self.search_context = 'default_search'
+        
 
 dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)
