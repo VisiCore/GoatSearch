@@ -4,6 +4,8 @@ import json
 import os
 import re
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import socket
 import sys
 import time
@@ -12,6 +14,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 from splunklib.searchcommands import \
     dispatch, GeneratingCommand, Configuration, Option, validators
+
+# Module-level token cache: {cache_key: (token, expiry_timestamp)}
+_token_cache = {}
 
 @Configuration(local=True, type='events', retainsevents=True)
 class goatsearch(GeneratingCommand):
@@ -48,11 +53,43 @@ class goatsearch(GeneratingCommand):
 
     total_event_count = 0
     offset = 0
-    api_limit = 200
+    api_limit = 5000  # Increased from 1000 for better performance
 
     can_run = False
 
+    # Connection pooling session
+    _session = None
+
+    def _get_session(self):
+        """Get or create a requests session with connection pooling and retries."""
+        if self._session is None:
+            self._session = requests.Session()
+            # Configure retry strategy
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=0.5,
+                status_forcelist=[429, 500, 502, 503, 504],
+            )
+            adapter = HTTPAdapter(
+                pool_connections=10,
+                pool_maxsize=10,
+                max_retries=retry_strategy
+            )
+            self._session.mount("https://", adapter)
+            self._session.mount("http://", adapter)
+        return self._session
+
     def _get_auth_token(self):
+        global _token_cache
+
+        # Check cache first
+        cache_key = "%s:%s" % (self.v_tenant, self.v_client_id)
+        if cache_key in _token_cache:
+            token, expiry = _token_cache[cache_key]
+            if time.time() < expiry:
+                self.access_token = token
+                return True
+
         # TODO: Take this from the .conf/password object
         # TODO: Maybe make the audience configurable?
 
@@ -70,6 +107,7 @@ class goatsearch(GeneratingCommand):
         for storage_password in storage_passwords.list():
             if storage_password.name == credential_name:
                 credential = storage_password['clear_password']
+                break
 
         auth_uri = 'https://login.cribl.cloud/oauth/token'
 
@@ -84,16 +122,21 @@ class goatsearch(GeneratingCommand):
             'Content-Type': 'application/json'
         }
 
-        auth_result = requests.post(
+        auth_result = self._get_session().post(
             auth_uri,
             json = auth,
-            headers = headers
+            headers = headers,
+            timeout=30
         )
 
         auth_json = json.loads(auth_result.text)
 
         if 'access_token' in auth_json.keys():
             self.access_token = auth_json['access_token']
+
+            # Cache token with expiry (default 1 hour, minus 60s buffer)
+            expires_in = auth_json.get('expires_in', 3600)
+            _token_cache[cache_key] = (self.access_token, time.time() + expires_in - 60)
 
             return True
 
@@ -191,10 +234,11 @@ class goatsearch(GeneratingCommand):
 
             # TODO: Require sample to be an integer (and possibly a power of 10)
 
-            search_job = requests.post(
+            search_job = self._get_session().post(
                 self.baseuri,
                 json = job,
-                headers = self.headers
+                headers = self.headers,
+                timeout=60
             )
 
             job_deets = json.loads(search_job.text)
@@ -225,7 +269,7 @@ class goatsearch(GeneratingCommand):
                         return True
 
             current = current + 1
-            time.sleep(5)
+            time.sleep(1)  # Reduced from 5 seconds
 
         return False
 
@@ -243,9 +287,10 @@ class goatsearch(GeneratingCommand):
                 self.search_context
             )
 
-            dataset_job = requests.get(
+            dataset_job = self._get_session().get(
                 dataseturi,
-                headers=self.headers
+                headers=self.headers,
+                timeout=30
             )
 
             dataset_deets = json.loads(dataset_job.text)
@@ -283,9 +328,10 @@ class goatsearch(GeneratingCommand):
                     self.job_id
                 )
 
-                status = requests.get(
+                status = self._get_session().get(
                     status_uri,
-                    headers = self.headers
+                    headers = self.headers,
+                    timeout=30
                 )
 
                 if self.debug:
@@ -340,6 +386,10 @@ class goatsearch(GeneratingCommand):
 
                 # TODO: Do something if the job fail
 
+                # Small delay between status polls
+                if not self.job_complete:
+                    time.sleep(0.5)
+
                 collecting = True
 
                 while collecting:
@@ -356,10 +406,11 @@ class goatsearch(GeneratingCommand):
 
                     self.headers['Accept'] = 'application/x-nd-json'
 
-                    results_chunk = requests.get(
+                    results_chunk = self._get_session().get(
                         results_uri,
                         headers = self.headers,
-                        stream = True
+                        stream = True,
+                        timeout=120
                     )
 
                     for line in results_chunk.iter_lines():
@@ -386,30 +437,29 @@ class goatsearch(GeneratingCommand):
                             if 'totalEventCount' in event.keys():
                                 self.total_event_count = event['totalEventCount']
                         else:
-                            if '_time' in event:
-                                if event['_time'] < earliest_seen or earliest_seen == 0:
-                                    earliest_seen = event['_time']
-
-                                if event['_time'] > latest_seen or latest_seen == 0:
-                                    latest_seen = event['_time']
+                            event_time = event.get('_time')
+                            if event_time:
+                                if event_time < earliest_seen or earliest_seen == 0:
+                                    earliest_seen = event_time
+                                if event_time > latest_seen or latest_seen == 0:
+                                    latest_seen = event_time
                             else:
-                                earliest_seen = time.time()
-                                latest_seen = time.time()
+                                event_time = time.time()
+                                earliest_seen = event_time
+                                latest_seen = event_time
 
                             evt = {
-                                '_raw': event['_raw'] if '_raw' in event else json.dumps(event),
-                                '_time': event['_time'] if '_time' in event else time.time(),
-                                'index': event['dataset'] if 'dataset' in event else 'unknown',
-                                'source': event['source'] if 'source' in event else 'unknown',
-                                'sourcetype': event['datatype'] if 'datatype' in event else 'unknown'
+                                '_raw': event.get('_raw') or json.dumps(event),
+                                '_time': event_time,
+                                'index': event.get('dataset', 'unknown'),
+                                'source': event.get('source', 'unknown'),
+                                'sourcetype': event.get('datatype', 'unknown')
                             }
 
-                            if 'instance' in event and 'datatype' in event and event['datatype'] == 'cribl_json':
+                            if event.get('datatype') == 'cribl_json' and 'instance' in event:
                                 evt['host'] = event['instance']
 
-                            for k, v in event.items():
-                                if k[0] != '_':
-                                    evt[k] = v
+                            evt.update({k: v for k, v in event.items() if not k.startswith('_')})
 
                             yield evt
 
@@ -458,3 +508,4 @@ class goatsearch(GeneratingCommand):
         self.search_context = 'default_search'
 
 dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)
+
