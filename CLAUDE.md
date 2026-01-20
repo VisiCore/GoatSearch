@@ -56,6 +56,27 @@ review.
 - Tests detect pagination bugs via row_number() sequencing
 - Artifacts capture analysis for review
 
+### Test Integrity
+
+**Tests must fail honestly.** When a test fails, the correct response is to
+investigate and fix the root cause—never to bypass, suppress, or mark tests
+as expected failures.
+
+Prohibited practices:
+
+- Using `xfail`, `skip`, or similar to hide legitimate failures
+- Adjusting assertions to match broken behavior
+- Disabling tests that expose real bugs
+- Adding logic to ignore known issues
+
+If a test fails, either:
+
+1. Fix the underlying bug in the code
+2. Fix the test if it contains an error
+3. Document the investigation if the cause is unclear
+
+Failing CI is the correct outcome when code has defects.
+
 ## Environment Requirements
 
 ### Python Version
