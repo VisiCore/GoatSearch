@@ -184,7 +184,7 @@ class goatsearch(GeneratingCommand):
                 sample_ratio = 1 / int(self.sample)
 
             job = {
-                'query': 'cribl %s' % self.query,
+                'query': '%s' % self.query,
                 'earliest': earliest,
                 'latest': latest,
                 'sampleRate': sample_ratio
