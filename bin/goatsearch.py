@@ -25,6 +25,7 @@ class goatsearch(GeneratingCommand):
     latest = Option(require=False, validate=None)
     sid = Option(require=False, validate=None)
     retry = Option(require=False, validate=validators.Integer())
+    savedsearch = Option(require=False, validate=None)
 
     access_token = False
 
@@ -48,7 +49,7 @@ class goatsearch(GeneratingCommand):
 
     total_event_count = 0
     offset = 0
-    api_limit = 200
+    api_limit = 1000
 
     can_run = False
 
@@ -229,6 +230,122 @@ class goatsearch(GeneratingCommand):
 
         return False
 
+    def _prepare_saved_search(self):
+        # TODO: Error if not found.
+        savedsearch_uri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/saved/%s' % (
+            self.v_workspace,
+            self.v_tenant,
+            self.search_context,
+            self.savedsearch
+        )
+
+        savedsearch_job = requests.get(
+            savedsearch_uri,
+            headers = self.headers
+        )
+
+
+        ss_info = json.loads(savedsearch_job.text)
+
+        earliest = "-10m"
+        latest = "now"
+
+        query = ""
+
+        for ss in ss_info['items']:
+            earliest = ss['earliest']
+            latest = ss['latest']
+            query = ss['query']
+
+        goatevent = {
+            "data": {},
+            "_time": time.time()
+        }
+
+        self.baseuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/jobs' % (
+            self.v_workspace,
+            self.v_tenant,
+            self.search_context
+        )
+
+        if not self.retry:
+            retry = 10
+        else:
+            retry = int(self.retry)
+
+        current = 0
+
+        while current < retry:
+            if self.sid:
+                self.job_id = self.sid
+
+                return True
+
+            if self.debug:
+                devt = {
+                    "url": self.baseuri
+                }
+
+                self.event_log.append({
+                    "_raw": json.dumps(devt),
+                    "_time": time.time(),
+                    "source": "goatsearch",
+                    "sourcetype": "goatsearch:json",
+                    "host": "localhost"
+                })
+
+            if not self.sample:
+                sample_ratio = 1
+            else:
+                sample_ratio = 1 / int(self.sample)
+
+            job = {
+                'query': '%s' % query,
+                'earliest': earliest,
+                'latest': latest,
+                'sampleRate': sample_ratio
+            }
+
+            # TODO: Require sample to be an integer (and possibly a power of 10)
+
+            search_job = requests.post(
+                self.baseuri,
+                json = job,
+                headers = self.headers
+            )
+
+            job_deets = json.loads(search_job.text)
+
+            # TODO: Check that this is an expected { "items: [] } format
+
+            if not 'items' in job_deets:
+                devt = {
+                    "url": self.baseuri,
+                    "message": 'Missing Items',
+                    "job": job_deets
+                }
+  
+                # self.write_error(json.dumps(job_deets))
+
+                self.event_log.append({
+                    "_raw": json.dumps(devt),
+                    "_time": time.time(),
+                    "source": "goatsearch",
+                    "sourcetype": "goatsearch:json",
+                    "host": "localhost"
+                })
+            else:
+                for deet in job_deets['items']:
+                    if 'id' in deet:
+                        self.job_id = deet['id']
+
+                        return True
+
+            current = current + 1
+            time.sleep(5)
+
+        return False
+
     def generate(self):
         if not self.can_run:
             return
@@ -236,7 +353,35 @@ class goatsearch(GeneratingCommand):
         earliest_seen = 0
         latest_seen = 0
 
-        if not self.query and not self.sid:
+        if self.savedsearch and self.savedsearch == "*":
+            ssuri = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/saved' % (
+                self.v_workspace,
+                self.v_tenant,
+                self.search_context
+            )
+
+            ss_job = requests.get(
+                ssuri,
+                headers=self.headers
+            )
+
+            ss_deets = json.loads(ss_job.text)
+
+            for ss in ss_deets['items']:
+                evt = {
+                    '_raw': json.dumps(ss),
+                    '_time': time.time(),
+                    'index': 'default_search',
+                    'source': 'source',
+                    'sourcetype': 'saved_search'
+                }
+
+                for k, v in ss.items():
+                    evt[k]= v
+
+                yield evt
+
+        elif not self.query and not self.sid and not self.savedsearch:
             dataseturi = 'https://%s-%s.cribl.cloud/api/v1/m/%s/search/datasets' % (
                 self.v_workspace,
                 self.v_tenant,
@@ -263,10 +408,12 @@ class goatsearch(GeneratingCommand):
                     evt[k]= v
 
                 yield evt
-
         else:
             if self.query or self.sid:
                 self._prepare_event_search()
+
+            if self.savedsearch:
+                self._prepare_saved_search()
 
             if self.page:
                 self.api_limit = int(self.page)
@@ -386,15 +533,14 @@ class goatsearch(GeneratingCommand):
                             if 'totalEventCount' in event.keys():
                                 self.total_event_count = event['totalEventCount']
                         else:
-                            if '_time' in event:
-                                if event['_time'] < earliest_seen or earliest_seen == 0:
-                                    earliest_seen = event['_time']
+                            if not '_time' in event or event['_time'] is None:
+                                event['_time'] = time.time()
 
-                                if event['_time'] > latest_seen or latest_seen == 0:
-                                    latest_seen = event['_time']
-                            else:
-                                earliest_seen = time.time()
-                                latest_seen = time.time()
+                            if event['_time'] < earliest_seen or earliest_seen == 0:
+                                earliest_seen = event['_time']
+
+                            if event['_time'] > latest_seen or latest_seen == 0:
+                                latest_seen = event['_time']
 
                             evt = {
                                 '_raw': event['_raw'] if '_raw' in event else json.dumps(event),

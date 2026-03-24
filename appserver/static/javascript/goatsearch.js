@@ -50,6 +50,23 @@ require([
         updateSPLSearch();
     });
 
+    tokens.on("change:tokenSelectedSavedSearch", function(model, value, options) {
+        if ( value == "-" ) {
+            $("#csearch_query").prop("disabled", false);
+            updateSPLSearch();
+
+            tokens.unset("useSavedSearch");
+            stokens.unset("useSavedSearch");
+        } else {
+            $("#csearch_query").prop("disabled", true);
+            var savedSearchId = tokens.get("tokenSelectedSavedSearch");
+
+            globalSetToken('queryString', ` savedsearch="${savedSearchId}"`);
+
+            tokens.set("useSavedSearch", true);
+        }
+    });
+
     $(document).ready(function() {
         updateSPLSearch();
     });

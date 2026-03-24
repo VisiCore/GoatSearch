@@ -110,14 +110,14 @@
       </html>
     </panel>
     <panel>
-      <input type="time" token="tokenCSearchTime">
+      <input type="time" token="tokenCSearchTime" rejects="$useSavedSearch$">
         <label>Time Range</label>
         <default>
           <earliest>-15m</earliest>
           <latest>now</latest>
         </default>
       </input>
-      <input type="dropdown" token="tokenSelectedDataset" depends="$tokenSelectedTenant$">
+      <input type="dropdown" token="tokenSelectedDataset" depends="$tokenSelectedTenant$" rejects="$useSavedSearch$">
         <label>Dataset</label>
         <fieldForLabel>display</fieldForLabel>
         <fieldForValue>id</fieldForValue>
@@ -127,6 +127,18 @@
           </query>
         </search>
         <default>cribl_internal_logs</default>
+      </input>
+      <input type="dropdown" token="tokenSelectedSavedSearch" depends="$tokenSelectedTenant$">
+        <label>Saved Search</label>
+        <fieldForLabel>name</fieldForLabel>
+        <fieldForValue>id</fieldForValue>
+        <search>
+          <query>
+            | savedsearch sysGetSavedSearches tenant="$tokenSelectedTenant$" workspace="$tokenSelectedWorkspace$" savedsearch="*"
+          </query>
+        </search>
+        <default>-</default>
+        <choice value="-">None</choice>
       </input>
       <input type="text" depends="$hide$" token="loadTenant">
         <label></label>
@@ -147,7 +159,7 @@
       </html>
     </panel>
   </row>
-  <row depends="$tokenSelectedTenant$">
+  <row depends="$tokenSelectedTenant$" rejects="$useSavedSearch$">
     <panel>
       <title>Event Preview</title>
       <html>
