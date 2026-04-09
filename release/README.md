@@ -8,7 +8,7 @@ Modern, distributed observability and security architectures require modern solu
 
 GoatSearch allows you to render [Cribl](https://cribl.io) Search results through a [Splunk](https://splunk.com/) search or dashboard! Simply configure your tenant and use the GoatSearch Explorer to craft your first query. Once the results are generated, use them as you would any other data in Splunk.  Don't just think inside the search bar! GoatSearch can do all kinda cool things - like Instant Replays.  Suggestions? Enhancements? Bugs? Cool use cases? [Open an Issue](https://github.com/VisiCore/GoatSearch/issues) or [Submit a Pull Request](https://github.com/VisiCore/GoatSearch/pulls)!
 
-[GoatSearch Overview](https://www.youtube.com/j-7lvHqZvhI)
+[GoatSearch Overview](https://www.youtube.com/watch?v=j-7lvHqZvhI)
 
 ## Get GoatSearch:
 - [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
