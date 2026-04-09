@@ -1,5 +1,7 @@
 # GoatSearch
 
+(https://static.visicoretech.com/img/goatsearch.png)
+
 Herein lies GoatSearch.
 
 [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
