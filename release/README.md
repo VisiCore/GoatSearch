@@ -94,7 +94,7 @@ The official 1.0.0 release of GoatSearch is here bringing you:
 ### 0.10.2 (July 1, 2025)
 Initial Release
 
-### Notes for Developers
+## Notes for Developers
 If you want to contribute to GoatSearch, please consider the following:
 1. All pull requests must be validated against the original Cribl search. Event counts and fields must match over any time period.
 2. Existing functionality must not break.
