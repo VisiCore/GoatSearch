@@ -1,6 +1,6 @@
 # GoatSearch
 
-(https://static.visicoretech.com/img/goatsearch.png)
+![Ian the Goat](https://static.visicoretech.com/img/goatsearch.png)
 
 Herein lies GoatSearch.
 
