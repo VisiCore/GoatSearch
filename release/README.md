@@ -5,12 +5,13 @@
 Modern, distributed observability and security architectures require modern solutions. Welcome to GoatSearch!
 
 ## About GoatSearch
-
 GoatSearch allows you to render [Cribl](https://cribl.io) Search results through a [Splunk](https://splunk.com/) search or dashboard! Simply configure your tenant and use the GoatSearch Explorer to craft your first query. Once the results are generated, use them as you would any other data in Splunk.  Don't just think inside the search bar! GoatSearch can do all kinda cool things - like Instant Replays.  Suggestions? Enhancements? Bugs? Cool use cases? [Open an Issue](https://github.com/VisiCore/GoatSearch/issues) or [Submit a Pull Request](https://github.com/VisiCore/GoatSearch/pulls)!
 
 [GoatSearch Overview](https://www.youtube.com/watch?v=j-7lvHqZvhI)
 
 ## Get GoatSearch:
+Install GoatSearch as you would any other Splunk app. GoatSearch should only be installed on search heads - or as a private app upload for Splunk Cloud.
+
 - [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
 - [Older Versions](https://github.com/VisiCore/GoatSearch/tree/main/release/dist)
 
@@ -58,10 +59,10 @@ The GoatSearch package also has a `goatpass` command. It handles passwords (clie
 - Corrects an issue where multiple Cribl Searches are instantiated but only one actioned
 
 ### 1.0.11 (July 17, 2025)
-1.1.0 RC 2
+- 1.1.0 RC 2
 
 ### 1.0.10 (July 17, 2025)
-1.1.0 RC 1
+- 1.1.0 RC 1
 
 ### 1.0.1 (July 10, 2025)
 #### Bug Fixes
@@ -92,10 +93,11 @@ The official 1.0.0 release of GoatSearch is here bringing you:
 - Corrects an issue with sample ratio/API expected format
 
 ### 0.10.2 (July 1, 2025)
-Initial Release
+- Initial Release
 
 ## Notes for Developers
 If you want to contribute to GoatSearch, please consider the following:
+
 1. All pull requests must be validated against the original Cribl search. Event counts and fields must match over any time period.
 2. Existing functionality must not break.
 3. Make sure that you ignore the `$APP_HOME/release` directory from both builds and AppInspect packages. You can use the Duck Off! feature in [Duck Yeah!](https://splunkbase.splunk.com/app/7015). We recommend Duck Yeah! to validate your builds.
