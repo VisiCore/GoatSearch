@@ -4,7 +4,7 @@ Herein lies GoatSearch.
 
 [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
 
-[Older Versions]()
+[Older Versions](https://github.com/VisiCore/GoatSearch/tree/main/release/dist)
 
 ### Notes for Developers
 If you want to contribute to GoatSearch, please consider the following:
