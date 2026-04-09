@@ -2,6 +2,10 @@
 
 Herein lies GoatSearch.
 
+[Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
+
+[Older Versions]()
+
 ### Notes for Developers
 If you want to contribute to GoatSearch, please consider the following:
 1. All pull requests must be validated against the original Cribl search. Event counts and fields must match over any time period.
