@@ -501,6 +501,15 @@ class goatsearch(GeneratingCommand):
 
                     # TODO: We have to account for the fact these results may be out of time-order.
 
+                    if self.debug:
+                        yield {
+                            "_raw": json.dumps({"url": results_uri}),
+                            "_time": time.time(),
+                            "source": "goatsearch",
+                            "sourcetype": "goatsearch:debug",
+                            "host": "localhost"
+                        }
+
                     self.headers['Accept'] = 'application/x-nd-json'
 
                     results_chunk = requests.get(
