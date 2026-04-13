@@ -6,6 +6,6 @@ Modern, distributed observability and security architectures require modern solu
 
 ## Get GoatSearch
 Use the following links for info, downloads, version history, and contibutor info.
-- [Overview and Release Notes (https://github.com/VisiCore/GoatSearch/blob/main/release/README.md)
+- [Overview and Release Notes](https://github.com/VisiCore/GoatSearch/blob/main/release/README.md)
 - [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
 - [Older Versions](https://github.com/VisiCore/GoatSearch/tree/main/release/dist)
