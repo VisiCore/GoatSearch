@@ -1,0 +1,39 @@
+name: Live Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install
+        run: pip install -r tests/requirements.txt
+
+      - name: Lint
+        run: ruff check tests/
+
+      - name: Test
+        if: env.CRIBL_CLIENT_ID != ''
+        env:
+          CRIBL_CLIENT_ID: ${{ secrets.CRIBL_CLIENT_ID }}
+          CRIBL_CLIENT_SECRET: ${{ secrets.CRIBL_CLIENT_SECRET }}
+          CRIBL_TENANT: ${{ secrets.CRIBL_TENANT }}
+          CRIBL_WORKSPACE: ${{ secrets.CRIBL_WORKSPACE }}
+        run: pytest tests/ -m live -vv
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-artifacts
+          path: tests/artifacts/
+          if-no-files-found: ignore
