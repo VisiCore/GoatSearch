@@ -4,8 +4,8 @@
         "title": "VisiCore GoatSearch",
         "id": {
             "group": null,
-            "name": "GoatSearch",
-            "version": "1.1.0"
+            "name": "VC-GoatSearch",
+            "version": "1.2.0"
         },
         "author": [
             {

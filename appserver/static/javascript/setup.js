@@ -53,7 +53,7 @@ require([
                 }
 
                 $container.html(`
-                    <a class="btn btn-primary btn-explore" aria-label="Search Button" href="/app/GoatSearch/goatsearch_explorer?form.loadTenant=${params[0]}"><i class="icon-search-thin"></i></a>
+                    <a class="btn btn-primary btn-explore" aria-label="Search Button" href="/app/VC-GoatSearch/goatsearch_explorer?form.loadTenant=${params[0]}"><i class="icon-search-thin"></i></a>
                     <button class="btn btn-primary goatsearch-edit" data-target="${params[0]}">Edit</button>
                     <button class="btn btn-delete goatsearch-delete" data-target="${params[0]}">Delete</button>
                     <button class="btn ${btn_class} goatsearch-default" data-target="${params[0]}"${disable_prop}>Make Default</button>

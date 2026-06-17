@@ -43,7 +43,7 @@ require([
         const earliest = tokens.get('tokenCSearchTime.earliest');
         const latest  = tokens.get('tokenCSearchTime.latest');
 
-        window.open(`/app/GoatSearch/search?earliest=${earliest}&latest=${latest}&q=${goatsearch}`, '_blank').focus();
+        window.open(`/app/VC-GoatSearch/search?earliest=${earliest}&latest=${latest}&q=${goatsearch}`, '_blank').focus();
     });
 
     tokens.on("change:tokenSelectedDataset", function(model, value, options) {
