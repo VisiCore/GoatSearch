@@ -41,6 +41,14 @@ Here is a list of the `goatsearch` options available as of version 1.1.0:
 The GoatSearch package also has a `goatpass` command. It handles passwords (client secrets) and that's all we're gonna tell you. If you want to figure it out be our guest - however long that takes will be infinitely longer than just letting it do its thing.
 
 ## Version History
+### 1.2.0 (June 17, 2026)
+#### Enhancements
+- Supports `.` dot commands in `| goatsearch`
+- Supports Cribl Saved Searches
+
+#### Bug Fixes
+- Corrects an issue where GoatSearch will not install due to a Splunkbase ID conflict.
+
 ### 1.1.0 (July 17, 2025)
 [Release notes video walkthrough](https://www.youtube.com/watch?v=olBvx2z-IHg)
 
@@ -98,7 +106,8 @@ The official 1.0.0 release of GoatSearch is here bringing you:
 ## Notes for Developers
 If you want to contribute to GoatSearch, please consider the following:
 
-1. All pull requests must be validated against the original Cribl search. Event counts and fields must match over any time period.
-2. Existing functionality must not break.
-3. Make sure that you ignore the `$APP_HOME/release` directory from both builds and AppInspect packages. You can use the Duck Off! feature in [Duck Yeah!](https://splunkbase.splunk.com/app/7015). We recommend Duck Yeah! to validate your builds.
-4. Do not remove contributor information from the headers.
+1. **YOU MUST RENAME YOUR LOCAL REPO DIRECTORY TO `VC-GoatSearch`. This will cause the ID to be set appropriately when building from the repository.
+2. All pull requests must be validated against the original Cribl search. Event counts and fields must match over any time period.
+3. Existing functionality must not break.
+4. Make sure that you ignore the `$APP_HOME/release` directory from both builds and AppInspect packages. You can use the Duck Off! feature in [Duck Yeah!](https://splunkbase.splunk.com/app/7015). We recommend Duck Yeah! to validate your builds.
+5. Do not remove contributor information from the headers.
