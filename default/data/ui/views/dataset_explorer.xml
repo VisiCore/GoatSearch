@@ -1,0 +1,52 @@
+<form version="1.1" theme="dark">
+  <label>Dataset Explorer</label>
+  <row>
+    <panel>
+      <input type="dropdown" token="tokenSelectedTenant">
+        <label>Tenant</label>
+        <fieldForLabel>tenant</fieldForLabel>
+        <fieldForValue>tenant</fieldForValue>
+        <search>
+          <query>
+            | savedsearch sysGetTenantList
+          </query>
+        </search>
+        <change>
+          <eval token="tenantString">if (isnull($value$), "", " tenant=\"" + $value$ + "\"")</eval>
+        </change>
+      </input>
+      <input type="text" depends="$hide$" token="loadTenant">
+        <label></label>
+      </input>
+    </panel>
+    <panel depends="$tokenSelectedTenant$">
+      <input type="dropdown" token="tokenSelectedWorkspace">
+        <label>Workspace</label>
+        <fieldForLabel>workspace</fieldForLabel>
+        <fieldForValue>workspace</fieldForValue>
+        <search>
+          <query>
+            | savedsearch sysGetWorkspaceList tenant="$tokenSelectedTenant$"
+          </query>
+        </search>
+        <default>main</default>
+        <change>
+          <eval token="workspaceString">if (isnull($value$), "", " workspace=\"" + $value$ + "\"")</eval>
+        </change>
+      </input>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <search>
+          <query>
+            | goatsearch tenant="$tokenSelectedTenant$" workspace="$tokenSelectedWorkspace$"
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+  </row>
+</form>

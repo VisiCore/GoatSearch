@@ -43,11 +43,28 @@ require([
         const earliest = tokens.get('tokenCSearchTime.earliest');
         const latest  = tokens.get('tokenCSearchTime.latest');
 
-        window.open(`/app/GoatSearch/search?earliest=${earliest}&latest=${latest}&q=${goatsearch}`, '_blank').focus();
+        window.open(`/app/VC-GoatSearch/search?earliest=${earliest}&latest=${latest}&q=${goatsearch}`, '_blank').focus();
     });
 
     tokens.on("change:tokenSelectedDataset", function(model, value, options) {
         updateSPLSearch();
+    });
+
+    tokens.on("change:tokenSelectedSavedSearch", function(model, value, options) {
+        if ( value == "-" ) {
+            $("#csearch_query").prop("disabled", false);
+            updateSPLSearch();
+
+            tokens.unset("useSavedSearch");
+            stokens.unset("useSavedSearch");
+        } else {
+            $("#csearch_query").prop("disabled", true);
+            var savedSearchId = tokens.get("tokenSelectedSavedSearch");
+
+            globalSetToken('queryString', ` savedsearch="${savedSearchId}"`);
+
+            tokens.set("useSavedSearch", true);
+        }
     });
 
     $(document).ready(function() {

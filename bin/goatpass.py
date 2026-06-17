@@ -83,7 +83,7 @@ class goatpass(StreamingCommand):
                             stanza.update(is_configured=1)
                             break
 
-                    app = self.service.apps['GoatSearch']
+                    app = self.service.apps['VC-GoatSearch']
                     app.reload()
                 else:
                     event['clientSecret'] = '<<MISSING_FIELDS>>'
