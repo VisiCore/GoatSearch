@@ -8,7 +8,7 @@ import socket
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "lib"))
 
 from splunklib.searchcommands import \
     dispatch, GeneratingCommand, Configuration, Option, validators
@@ -226,7 +226,7 @@ class goatsearch(GeneratingCommand):
                         return True
 
             current = current + 1
-            time.sleep(5)
+            # time.sleep(5)
 
         return False
 
@@ -342,7 +342,7 @@ class goatsearch(GeneratingCommand):
                         return True
 
             current = current + 1
-            time.sleep(5)
+            # time.sleep(5)
 
         return False
 
