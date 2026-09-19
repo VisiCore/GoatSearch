@@ -12,7 +12,7 @@ GoatSearch allows you to render [Cribl](https://cribl.io) Search results through
 ## Get GoatSearch:
 Install GoatSearch as you would any other Splunk app. GoatSearch should only be installed on search heads - or as a private app upload for Splunk Cloud.
 
-- [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/GoatSearch-latest.tgz)
+- [Download GoatSearch](https://raw.githubusercontent.com/VisiCore/GoatSearch/refs/heads/main/release/dist/VC-GoatSearch-latest.tgz)
 - [Older Versions](https://github.com/VisiCore/GoatSearch/tree/main/release/dist)
 
 ## GoatSearch Details:
@@ -41,6 +41,10 @@ Here is a list of the `goatsearch` options available as of version 1.1.0:
 The GoatSearch package also has a `goatpass` command. It handles passwords (client secrets) and that's all we're gonna tell you. If you want to figure it out be our guest - however long that takes will be infinitely longer than just letting it do its thing.
 
 ## Version History
+### 1.2.1 (Sept 19, 2026)
+#### Enhancements
+- Performance improvements
+
 ### 1.2.0 (June 17, 2026)
 #### Enhancements
 - Supports `.` dot commands in `| goatsearch`
