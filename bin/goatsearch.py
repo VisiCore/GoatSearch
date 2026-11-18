@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import csv
+import io
 import json
 import os
 import re
@@ -7,25 +9,62 @@ import requests
 import socket
 import sys
 import time
+import traceback
+import urllib.parse
+import warnings
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "lib"))
+class goatsearch:
+    query = None
+    sample = None
+    page = None
+    tenant = None
+    workspace = None
+    debug = None
+    earliest = None
+    latest = None
+    sid = None
+    retry = None
+    savedsearch = None
 
-from splunklib.searchcommands import \
-    dispatch, GeneratingCommand, Configuration, Option, validators
+    options = {
+        'query': None,
+        'sample': 'integer',
+        'page': 'integer',
+        'tenant': None,
+        'workspace': None,
+        'debug': 'boolean',
+        'earliest': None,
+        'latest': None,
+        'sid': None,
+        'retry': 'integer',
+        'savedsearch': None
+    }
 
-@Configuration(local=True, type='events', retainsevents=True)
-class goatsearch(GeneratingCommand):
-    query = Option(require=False, validate=None)
-    sample = Option(require=False, validate=validators.Integer())
-    page = Option(require=False, validate=validators.Integer())
-    tenant = Option(require=False, validate=None)
-    workspace = Option(require=False, validate=None)
-    debug = Option(require=False, validate=validators.Boolean())
-    earliest = Option(require=False, validate=None)
-    latest = Option(require=False, validate=None)
-    sid = Option(require=False, validate=None)
-    retry = Option(require=False, validate=validators.Integer())
-    savedsearch = Option(require=False, validate=None)
+    truth_values = {
+        '1': True, '0': False,
+        't': True, 'f': False,
+        'true': True, 'false': False,
+        'y': True, 'n': False,
+        'yes': True, 'no': False
+    }
+
+    configuration = {
+        'type': 'stateful',
+        'generating': True
+    }
+
+    ifile = None
+    ofile = None
+
+    metadata = None
+    searchinfo = None
+
+    maxresultrows = 50000
+
+    records = []
+    messages = []
+
+    pending = False
 
     access_token = False
 
@@ -57,7 +96,11 @@ class goatsearch(GeneratingCommand):
         # TODO: Take this from the .conf/password object
         # TODO: Maybe make the audience configurable?
 
-        storage_passwords = self.service.storage_passwords
+        storage_passwords = self._splunkd(
+            'storage/passwords',
+            output_mode = 'json',
+            count = -1
+        )
 
         credential_name = "%s:%s:" % (
             self.v_tenant,
@@ -68,9 +111,9 @@ class goatsearch(GeneratingCommand):
 
         credential = False
 
-        for storage_password in storage_passwords.list():
-            if storage_password.name == credential_name:
-                credential = storage_password['clear_password']
+        for storage_password in storage_passwords['entry']:
+            if storage_password['name'] == credential_name:
+                credential = storage_password['content']['clear_password']
 
         auth_uri = 'https://login.cribl.cloud/oauth/token'
 
@@ -117,9 +160,10 @@ class goatsearch(GeneratingCommand):
                 "workspace": "main"
             }
 
-        collection = self.service.kvstore['goatsearch_env_kv']
-
-        env_raw = collection.data.query(query=kvquery)
+        env_raw = self._splunkd(
+            'storage/collections/data/goatsearch_env_kv',
+            query = json.dumps(kvquery)
+        )
 
         for env in env_raw:
             self.v_client_id = env['clientId']
@@ -132,12 +176,12 @@ class goatsearch(GeneratingCommand):
 
     def _prepare_event_search(self):
         if self.earliest is None:
-            earliest = self.metadata.searchinfo.earliest_time
+            earliest = self.searchinfo['earliest_time']
         else:
             earliest = self.earliest
 
         if self.latest is None:
-            latest = self.metadata.searchinfo.latest_time
+            latest = self.searchinfo['latest_time']
         else:
             latest = self.latest
 
@@ -470,16 +514,16 @@ class goatsearch(GeneratingCommand):
                         self.job_complete = True
 
                         if not self.complete_notice:
-                            self._record_writer._inspector['messages'] = []
+                            self.messages = []
                             self.write_info('Cribl Search job complete.')
 
                     if 'status' in job_status and job_status['status'] == 'queued' and not self.queue_notice:
-                        self._record_writer._inspector['messages'] = []
+                        self.messages = []
                         self.write_warning('Waiting for queued Cribl Search job to start.')
                         self.queue_notice = True
 
                     if 'status' in job_status and job_status['status'] == 'running' and not self.running_notice:
-                        self._record_writer._inspector['messages'] = []
+                        self.messages = []
                         self.write_info('Cribl Search job is running.')
                         self.running_notice = True
 
@@ -487,7 +531,9 @@ class goatsearch(GeneratingCommand):
 
                 # TODO: Do something if the job fail
 
-                collecting = True
+                collecting = self.job_complete
+
+                self.flush()
 
                 while collecting:
                     collecting = False
@@ -565,19 +611,24 @@ class goatsearch(GeneratingCommand):
                     self.flush()
 
             if earliest_seen > 0:
-                self.metadata.searchinfo.earliest_time = earliest_seen
+                self.searchinfo['earliest_time'] = earliest_seen
 
             if latest_seen > 0 and latest_seen == 0:
-                self.metadata.searchinfo.latest_time = latest_seen
+                self.searchinfo['latest_time'] = latest_seen
 
             if self.debug:
                 for evt in self.event_log:
                     yield evt
 
     def prepare(self):
-        user = self._metadata.searchinfo.username
+        user = self.searchinfo['username']
 
-        caps = self.service.users[user]['capabilities']
+        user_info = self._splunkd(
+            'authentication/users/%s' % urllib.parse.quote(user.lower(), safe=''),
+            output_mode = 'json'
+        )
+
+        caps = user_info['entry'][0]['content']['capabilities']
 
         if not 'goatsearch_user' in caps:
             self.write_error("You must have the 'goatsearch_user' capability to use this command.")
@@ -585,12 +636,12 @@ class goatsearch(GeneratingCommand):
 
         self.can_run = True
 
-        self._record_writer._inspector['messages'] = []
+        self.messages = []
         self.write_info("Getting environment settings.")
 
         self._get_environment()
 
-        self._record_writer._inspector['messages'] = []
+        self.messages = []
         self.write_info("Getting authentication token.")
         self._get_auth_token()
 
@@ -603,4 +654,264 @@ class goatsearch(GeneratingCommand):
         #       it could be a variable for a coming feature.
         self.search_context = 'default_search'
 
-dispatch(goatsearch, sys.argv, sys.stdin, sys.stdout, __name__)
+    def write_info(self, message):
+        self.messages.append(['INFO', message])
+
+    def write_warning(self, message):
+        self.messages.append(['WARN', message])
+
+    def write_error(self, message):
+        self.messages.append(['ERROR', message])
+
+    def flush(self):
+        if not self.records and not self.messages:
+            return
+
+        self._send(False)
+        self._read_execute()
+
+    def run(self, ifile, ofile):
+        self.ifile = ifile
+        self.ofile = ofile
+
+        try:
+            self._process()
+        except BrokenPipeError:
+            os._exit(0)
+        except Exception as error:
+            traceback.print_exc(file=sys.stderr)
+
+            self.write_error('%s: %s' % (type(error).__name__, error))
+
+            if self.pending:
+                self._send(True)
+
+            sys.exit(1)
+
+    def _process(self):
+        chunk = self._read_chunk()
+
+        if chunk is None:
+            return
+
+        metadata, body = chunk
+
+        if metadata.get('action') != 'getinfo':
+            raise RuntimeError('Expected getinfo action, not %s' % metadata.get('action'))
+
+        self.pending = 'getinfo'
+
+        self.metadata = metadata
+        self.searchinfo = metadata['searchinfo']
+
+        self.searchinfo['earliest_time'] = float(self.searchinfo['earliest_time'])
+        self.searchinfo['latest_time'] = float(self.searchinfo['latest_time'])
+
+        if self.searchinfo.get('maxresultrows'):
+            self.maxresultrows = int(self.searchinfo['maxresultrows'])
+
+        if not self._parse_options():
+            self._send()
+            sys.exit(1)
+
+        if not metadata.get('preview'):
+            self.prepare()
+
+        self._send()
+        self._read_execute()
+
+        for record in self.generate():
+            self.records.append(record)
+
+            if len(self.records) >= self.maxresultrows:
+                self.flush()
+
+        self._send(True)
+
+        while self._read_chunk() is not None:
+            self._send(True)
+
+    def _parse_options(self):
+        valid = True
+
+        for arg in self.searchinfo.get('args') or []:
+            result = arg.split('=', 1)
+
+            if len(result) == 1:
+                continue
+
+            name, value = result
+
+            if name not in self.options:
+                self.write_error('Unrecognized option: %s=%s' % (name, value))
+                valid = False
+                continue
+
+            try:
+                if self.options[name] == 'integer':
+                    value = int(value)
+                elif self.options[name] == 'boolean':
+                    value = self.truth_values[value.lower()]
+            except (KeyError, ValueError):
+                self.write_error('Illegal value: %s=%s' % (name, value))
+                valid = False
+                continue
+
+            setattr(self, name, value)
+
+        return valid
+
+    def _splunkd(self, path, **params):
+        uri = '%s/servicesNS/nobody/%s/%s' % (
+            self.searchinfo['splunkd_uri'],
+            urllib.parse.quote(self.searchinfo['app'], safe=''),
+            path
+        )
+
+        session = requests.Session()
+        session.trust_env = False
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+
+            response = session.get(
+                uri,
+                params = params,
+                headers = {
+                    'Authorization': 'Splunk %s' % self.searchinfo['session_key']
+                },
+                verify = False
+            )
+
+        response.raise_for_status()
+
+        return json.loads(response.text)
+
+    def _read_chunk(self):
+        header = self.ifile.readline()
+
+        if not header:
+            return None
+
+        match = re.match(r'chunked\s+1.0\s*,\s*(\d+)\s*,\s*(\d+)\s*\n', header.decode('utf-8'))
+
+        if match is None:
+            raise RuntimeError('Failed to parse transport header: %s' % header)
+
+        metadata_length = int(match.group(1))
+        body_length = int(match.group(2))
+
+        metadata = {}
+
+        if metadata_length > 0:
+            metadata = json.loads(self.ifile.read(metadata_length).decode('utf-8'))
+
+        body = self.ifile.read(body_length)
+
+        return metadata, body
+
+    def _read_execute(self):
+        chunk = self._read_chunk()
+
+        if chunk is None:
+            sys.exit(0)
+
+        metadata, body = chunk
+
+        if metadata.get('action') != 'execute':
+            raise RuntimeError('Expected execute action, not %s' % metadata.get('action'))
+
+        self.pending = 'execute'
+
+    def _send(self, finished=None):
+        if self.pending == 'getinfo':
+            metadata = dict(self.configuration)
+        else:
+            metadata = {
+                'finished': finished
+            }
+
+        if self.messages:
+            metadata['inspector'] = {
+                'messages': self.messages
+            }
+
+        metadata = json.dumps(metadata, separators=(',', ':')).encode('utf-8')
+        body = self._encode_records().encode('utf-8')
+
+        self.records = []
+        self.messages = []
+        self.pending = False
+
+        self.ofile.write(('chunked 1.0,%s,%s\n' % (len(metadata), len(body))).encode('utf-8'))
+        self.ofile.write(metadata)
+        self.ofile.write(body)
+        self.ofile.flush()
+
+    def _encode_records(self):
+        if not self.records:
+            return ''
+
+        fieldnames = {}
+
+        for record in self.records:
+            fieldnames.update(dict.fromkeys(record))
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+
+        header = []
+
+        for fieldname in fieldnames:
+            header.append(fieldname)
+            header.append('__mv_%s' % fieldname)
+
+        writer.writerow(header)
+
+        for record in self.records:
+            row = []
+
+            for fieldname in fieldnames:
+                row.extend(self._encode_value(record.get(fieldname)))
+
+            writer.writerow(row)
+
+        return buffer.getvalue()
+
+    def _encode_value(self, value):
+        if isinstance(value, (list, tuple)):
+            if len(value) > 1:
+                items = ['' if item is None else self._encode_scalar(item) for item in value]
+
+                return '\n'.join(items), ';'.join('$%s$' % item.replace('$', '$$') for item in items)
+
+            if len(value) == 0:
+                return None, None
+
+            value = value[0]
+
+        if value is None:
+            return None, None
+
+        return self._encode_scalar(value), None
+
+    def _encode_scalar(self, value):
+        if isinstance(value, bool):
+            return str(value.real)
+
+        if isinstance(value, str):
+            return value
+
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='backslashreplace')
+
+        if isinstance(value, (int, float)):
+            return str(value)
+
+        if isinstance(value, (dict, list, tuple)):
+            return json.dumps(value, separators=(',', ':'))
+
+        return repr(value)
+
+if __name__ == '__main__':
+    goatsearch().run(sys.stdin.buffer, sys.stdout.buffer)

@@ -41,6 +41,13 @@ Here is a list of the `goatsearch` options available as of version 1.1.0:
 The GoatSearch package also has a `goatpass` command. It handles passwords (client secrets) and that's all we're gonna tell you. If you want to figure it out be our guest - however long that takes will be infinitely longer than just letting it do its thing.
 
 ## Version History
+### 1.3.1 (Nov 18, 2026)
+#### Enhancements
+- Allows streaming results from the Cribl Search job
+
+#### Bug Fixes
+- Corrects an issue where GoatSearch will not install on newer Splunk environments due to Python version mismatches
+
 ### 1.2.1 (Sept 19, 2026)
 #### Enhancements
 - Performance improvements
